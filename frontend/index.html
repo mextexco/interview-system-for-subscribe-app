@@ -168,8 +168,8 @@
     <script type="module" src="dist/assets/visualizer.js"></script>
 
     <script>
-        // プロファイルビジュアライザーのインスタンス
-        let profileVisualizer = null;
+        // プロファイルビジュアライザーのインスタンス（グローバルに公開）
+        window.profileVisualizer = null;
 
         // アプリ初期化
         document.addEventListener('DOMContentLoaded', () => {
@@ -185,10 +185,19 @@
             // プロファイルビジュアライザー初期化（少し遅延させてReactの読み込みを待つ）
             setTimeout(() => {
                 if (window.initProfileVisualizer) {
-                    profileVisualizer = window.initProfileVisualizer('profileVisualizerContainer');
+                    window.profileVisualizer = window.initProfileVisualizer('profileVisualizerContainer');
                     console.log('[App] Profile Visualizer initialized');
                 } else {
                     console.error('[App] initProfileVisualizer not found');
+                    // リトライ（モジュール読み込みが遅い場合）
+                    setTimeout(() => {
+                        if (window.initProfileVisualizer) {
+                            window.profileVisualizer = window.initProfileVisualizer('profileVisualizerContainer');
+                            console.log('[App] Profile Visualizer initialized (retry)');
+                        } else {
+                            console.error('[App] initProfileVisualizer still not found after retry');
+                        }
+                    }, 1000);
                 }
             }, 100);
         });

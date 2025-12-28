@@ -10,6 +10,32 @@ let isRecording = false;
 const synth = window.speechSynthesis;
 let currentVoice = null;
 
+// VOICEVOX設定
+const VOICEVOX_URL = 'http://localhost:50021';
+let voicevoxAvailable = false;
+let currentAudio = null;  // 現在再生中の音声
+
+/**
+ * VOICEVOX接続チェック
+ */
+async function checkVoicevoxConnection() {
+    try {
+        const response = await fetch(`${VOICEVOX_URL}/version`, {
+            method: 'GET',
+            timeout: 3000
+        });
+        if (response.ok) {
+            voicevoxAvailable = true;
+            console.log('[VOICEVOX] Connected successfully');
+            return true;
+        }
+    } catch (error) {
+        voicevoxAvailable = false;
+        console.log('[VOICEVOX] Not available, using Web Speech API as fallback');
+    }
+    return false;
+}
+
 /**
  * 音声認識を初期化
  */
@@ -24,20 +50,45 @@ function initSpeechRecognition() {
 
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
-    recognition.continuous = false;
+
+    // 継続音声入力モードのチェックボックス状態に応じて設定
+    const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
+    recognition.continuous = continuousModeCheckbox ? continuousModeCheckbox.checked : false;
+
     recognition.interimResults = false;
 
     // 認識結果のハンドリング
     recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
+        // 継続モードの場合、全ての結果を結合
+        const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
+        const isContinuousMode = continuousModeCheckbox && continuousModeCheckbox.checked;
+
+        let transcript = '';
+        if (isContinuousMode) {
+            // 継続モード: 全ての認識結果を結合
+            for (let i = 0; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+        } else {
+            // 通常モード: 最後の結果のみ
+            transcript = event.results[0][0].transcript;
+        }
+
         console.log('[Voice] Recognition result:', transcript);
 
         // 認識したテキストを入力欄に設定
         const messageInput = document.getElementById('messageInput');
         if (messageInput) {
             messageInput.value = transcript;
-            // 自動送信
-            sendMessage();
+
+            // 継続モードがOFFの場合のみ自動送信
+            // 継続モードがONの場合は、ユーザーがマイクボタンを押して停止するまで待つ
+            if (!isContinuousMode) {
+                // 自動送信
+                sendMessage();
+            } else {
+                console.log('[Voice] Continuous mode: text updated, waiting for manual stop');
+            }
         }
     };
 
@@ -53,7 +104,21 @@ function initSpeechRecognition() {
     };
 
     recognition.onend = () => {
-        stopRecording();
+        console.log('[Voice] Recognition ended');
+        // 通常モードの場合のみ stopRecording() を呼ぶ
+        // 継続モードの場合は、ユーザーがボタンを押した時点で既に stopRecording() が呼ばれている
+        const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
+        const isContinuousMode = continuousModeCheckbox && continuousModeCheckbox.checked;
+
+        if (!isContinuousMode && isRecording) {
+            // 通常モード: 自動停止したのでクリーンアップ
+            stopRecording();
+        } else if (isContinuousMode && isRecording) {
+            // 継続モードで isRecording がまだ true の場合（予期しない停止）
+            console.log('[Voice] Unexpected end in continuous mode');
+            isRecording = false;
+            updateMicButton(false);
+        }
     };
 
     return true;
@@ -76,10 +141,14 @@ function startRecording() {
     }
 
     try {
+        // 録音開始時に継続モードのチェックボックス状態を反映
+        const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
+        recognition.continuous = continuousModeCheckbox ? continuousModeCheckbox.checked : false;
+
         recognition.start();
         isRecording = true;
         updateMicButton(true);
-        console.log('[Voice] Recording started');
+        console.log('[Voice] Recording started (continuous mode:', recognition.continuous, ')');
     } catch (error) {
         console.error('[Voice] Failed to start recording:', error);
     }
@@ -90,10 +159,38 @@ function startRecording() {
  */
 function stopRecording() {
     if (recognition && isRecording) {
+        console.log('[Voice] Stopping recording...');
+
         recognition.stop();
         isRecording = false;
         updateMicButton(false);
-        console.log('[Voice] Recording stopped');
+
+        // 継続モードがONの場合、停止時にメッセージを自動送信
+        const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
+        const isContinuousMode = continuousModeCheckbox && continuousModeCheckbox.checked;
+        const messageInput = document.getElementById('messageInput');
+        const messageText = messageInput ? messageInput.value.trim() : '';
+
+        console.log('[Voice] Recording stopped. Continuous mode:', isContinuousMode, ', Message:', messageText);
+
+        if (isContinuousMode && messageInput && messageText) {
+            console.log('[Voice] Continuous mode: Auto-sending message...');
+            // 少し遅延を入れて確実にUIが更新されてから送信
+            setTimeout(() => {
+                if (typeof sendMessage === 'function') {
+                    sendMessage();
+                    console.log('[Voice] Message sent successfully');
+                } else {
+                    console.error('[Voice] sendMessage function not found');
+                }
+            }, 100);
+        } else {
+            if (isContinuousMode) {
+                console.log('[Voice] Continuous mode enabled but no message to send');
+            }
+        }
+    } else {
+        console.log('[Voice] stopRecording called but not recording (isRecording:', isRecording, ')');
     }
 }
 
@@ -130,14 +227,9 @@ function showVoiceError(message) {
 }
 
 /**
- * テキストを音声で読み上げ
+ * テキストを音声で読み上げ（VOICEVOX優先、フォールバックでWeb Speech API）
  */
-function speakText(text, characterId = 'aoi') {
-    if (!synth) {
-        console.warn('このブラウザは音声合成に対応していません');
-        return;
-    }
-
+async function speakText(text, characterId = 'aoi') {
     // 絵文字を除去
     const cleanedText = removeEmojis(text);
 
@@ -147,10 +239,34 @@ function speakText(text, characterId = 'aoi') {
         return;
     }
 
+    // VOICEVOXが利用可能な場合はVOICEVOXを使用
+    if (voicevoxAvailable) {
+        console.log('[Voice] Using VOICEVOX for synthesis');
+        const success = await speakWithVoicevox(cleanedText, characterId);
+        if (success) {
+            return;
+        }
+        console.log('[Voice] VOICEVOX failed, falling back to Web Speech API');
+    }
+
+    // フォールバック: Web Speech API
+    console.log('[Voice] Using Web Speech API');
+    speakWithWebSpeechAPI(cleanedText, characterId);
+}
+
+/**
+ * Web Speech APIで読み上げ
+ */
+function speakWithWebSpeechAPI(text, characterId) {
+    if (!synth) {
+        console.warn('このブラウザは音声合成に対応していません');
+        return;
+    }
+
     // 既存の音声を停止
     synth.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(cleanedText);
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ja-JP';
 
     // キャラクターごとの音声設定
@@ -211,22 +327,115 @@ function getVoiceSettings(characterId) {
     const settings = {
         'misaki': {
             pitch: 1.2,  // 高め（女性）
-            rate: 1.0,   // 標準速度
-            volume: 1.0
+            rate: 1.3,   // やや速め（1.0 → 1.3）
+            volume: 1.0,
+            voicevoxSpeaker: 8,  // 春日部つむぎ（明るい女性）
+            voicevoxSpeed: 1.2
         },
         'kenta': {
             pitch: 0.8,  // 低め（男性）
-            rate: 0.95,  // やや遅め
-            volume: 1.0
+            rate: 1.25,  // やや速め（0.95 → 1.25）
+            volume: 1.0,
+            voicevoxSpeaker: 13,  // 青山龍星（落ち着いた男性）
+            voicevoxSpeed: 1.15
         },
         'aoi': {
             pitch: 1.0,  // 標準（中性）
-            rate: 1.0,
-            volume: 1.0
+            rate: 1.3,   // やや速め（1.0 → 1.3）
+            volume: 1.0,
+            voicevoxSpeaker: 3,  // ずんだもん（中性的）
+            voicevoxSpeed: 1.2
         }
     };
 
     return settings[characterId] || settings['aoi'];
+}
+
+/**
+ * VOICEVOXで音声合成
+ */
+async function speakWithVoicevox(text, characterId) {
+    const voiceSettings = getVoiceSettings(characterId);
+    const speaker = voiceSettings.voicevoxSpeaker;
+    const speed = voiceSettings.voicevoxSpeed;
+
+    try {
+        console.log(`[VOICEVOX] Synthesizing with speaker ${speaker}, speed ${speed}`);
+
+        // Step 1: 音声合成用のクエリを作成
+        const queryResponse = await fetch(
+            `${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(text)}&speaker=${speaker}`,
+            { method: 'POST' }
+        );
+
+        if (!queryResponse.ok) {
+            throw new Error(`Query failed: ${queryResponse.status}`);
+        }
+
+        const audioQuery = await queryResponse.json();
+
+        // 速度を設定
+        audioQuery.speedScale = speed;
+
+        // Step 2: 音声データを生成
+        const synthesisResponse = await fetch(
+            `${VOICEVOX_URL}/synthesis?speaker=${speaker}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(audioQuery)
+            }
+        );
+
+        if (!synthesisResponse.ok) {
+            throw new Error(`Synthesis failed: ${synthesisResponse.status}`);
+        }
+
+        // Step 3: 音声データを再生
+        const audioBlob = await synthesisResponse.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        // 既存の音声を停止
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+        }
+
+        currentAudio = new Audio(audioUrl);
+
+        currentAudio.onplay = () => {
+            console.log('[VOICEVOX] Playback started');
+            updateSpeakerIcon(true);
+            // 音声再生中は音声認識を停止
+            if (isRecording) {
+                recognition.stop();
+                isRecording = false;
+                updateMicButton(false);
+                console.log('[VOICEVOX] Recognition paused during speech');
+            }
+        };
+
+        currentAudio.onended = () => {
+            console.log('[VOICEVOX] Playback ended');
+            updateSpeakerIcon(false);
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+        };
+
+        currentAudio.onerror = (error) => {
+            console.error('[VOICEVOX] Playback error:', error);
+            updateSpeakerIcon(false);
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+        };
+
+        await currentAudio.play();
+        return true;
+
+    } catch (error) {
+        console.error('[VOICEVOX] Synthesis failed:', error);
+        return false;
+    }
 }
 
 /**
@@ -249,16 +458,27 @@ function updateSpeakerIcon(speaking) {
  * 音声合成を停止
  */
 function stopSpeaking() {
+    // VOICEVOX音声を停止
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+
+    // Web Speech API音声を停止
     if (synth) {
         synth.cancel();
-        updateSpeakerIcon(false);
     }
+
+    updateSpeakerIcon(false);
 }
 
 /**
  * 音声機能の初期化（ページ読み込み時）
  */
-function initVoiceFeatures() {
+async function initVoiceFeatures() {
+    // VOICEVOX接続チェック
+    await checkVoicevoxConnection();
+
     // 音声認識の初期化
     initSpeechRecognition();
 
@@ -275,7 +495,11 @@ function initVoiceFeatures() {
         }
     }
 
-    console.log('[Voice] Voice features initialized');
+    if (voicevoxAvailable) {
+        console.log('[Voice] Voice features initialized with VOICEVOX 🎵');
+    } else {
+        console.log('[Voice] Voice features initialized with Web Speech API');
+    }
 }
 
 // ページ読み込み時に音声機能を初期化
