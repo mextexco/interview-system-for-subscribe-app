@@ -5,6 +5,8 @@
 // 音声認識の設定
 let recognition = null;
 let isRecording = false;
+let hasReceivedResult = false;  // 結果を受信したかどうか
+let recognitionTimeout = null;  // タイムアウト管理用
 
 // 音声合成の設定
 const synth = window.speechSynthesis;
@@ -60,6 +62,8 @@ function initSpeechRecognition() {
 
     // 認識結果のハンドリング
     recognition.onresult = (event) => {
+        hasReceivedResult = true;  // 結果を受信した
+
         // 継続モードの場合、全ての結果を結合
         const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
         const isContinuousMode = continuousModeCheckbox && continuousModeCheckbox.checked;
@@ -121,11 +125,28 @@ function initSpeechRecognition() {
     };
 
     recognition.onend = () => {
-        console.log('[Voice] Recognition ended');
-        // 通常モードの場合のみ stopRecording() を呼ぶ
-        // 継続モードの場合は、ユーザーがボタンを押した時点で既に stopRecording() が呼ばれている
+        console.log('[Voice] Recognition ended, hasReceivedResult:', hasReceivedResult);
+
+        // タイムアウトをクリア
+        if (recognitionTimeout) {
+            clearTimeout(recognitionTimeout);
+            recognitionTimeout = null;
+        }
+
+        // 継続モードの場合、全ての結果を結合
         const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
         const isContinuousMode = continuousModeCheckbox && continuousModeCheckbox.checked;
+
+        // まだ録音中で結果を受信していない場合は再起動
+        if (isRecording && !hasReceivedResult) {
+            console.log('[Voice] No result received, restarting recognition...');
+            try {
+                recognition.start();
+                return;  // 再起動したので終了処理はスキップ
+            } catch (error) {
+                console.error('[Voice] Failed to restart recognition:', error);
+            }
+        }
 
         if (!isContinuousMode && isRecording) {
             // 通常モード: 自動停止したのでクリーンアップ
@@ -162,10 +183,21 @@ function startRecording() {
         const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
         recognition.continuous = continuousModeCheckbox ? continuousModeCheckbox.checked : false;
 
+        hasReceivedResult = false;  // 結果受信フラグをリセット
+
         recognition.start();
         isRecording = true;
         updateMicButton(true);
         console.log('[Voice] Recording started (continuous mode:', recognition.continuous, ')');
+
+        // 10秒後に自動停止（ユーザーが話さない場合のフェイルセーフ）
+        recognitionTimeout = setTimeout(() => {
+            if (isRecording && !hasReceivedResult) {
+                console.log('[Voice] Recognition timeout - no speech detected');
+                stopRecording();
+                showVoiceError('音声が検出されませんでした。もう一度お試しください。');
+            }
+        }, 10000);
     } catch (error) {
         console.error('[Voice] Failed to start recording:', error);
     }
@@ -177,6 +209,12 @@ function startRecording() {
 function stopRecording() {
     if (recognition && isRecording) {
         console.log('[Voice] Stopping recording...');
+
+        // タイムアウトをクリア
+        if (recognitionTimeout) {
+            clearTimeout(recognitionTimeout);
+            recognitionTimeout = null;
+        }
 
         recognition.stop();
         isRecording = false;
