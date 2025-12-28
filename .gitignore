@@ -26,6 +26,7 @@ ENV/
 # Data
 data/profiles/
 data/sessions/
+analyzed_sessions/
 
 # Node
 node_modules/
@@ -40,6 +41,9 @@ package-lock.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Design files
+*.psd
 
 # IDE
 .vscode/
