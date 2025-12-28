@@ -129,7 +129,11 @@ async function startInterview(gender) {
         setupVoiceButton();
 
         // ビジュアライゼーション初期化
-        updateStatusDisplay(currentProfile);
+        if (typeof updateStatusDisplay === 'function') {
+            updateStatusDisplay(currentProfile);
+        } else {
+            console.warn('[Chat] updateStatusDisplay not available yet');
+        }
 
     } catch (error) {
         console.error('Start interview error:', error);
@@ -234,7 +238,11 @@ async function sendMessage() {
 
         // プロファイル更新
         currentProfile = data.profile;
-        updateStatusDisplay(currentProfile);
+        if (typeof updateStatusDisplay === 'function') {
+            updateStatusDisplay(currentProfile);
+        } else {
+            console.warn('[Chat] updateStatusDisplay not available yet');
+        }
 
         // 取り消しボタンを有効化
         const undoButton = document.getElementById('undoButton');
@@ -316,7 +324,11 @@ async function undoLastTurn() {
 
         // プロファイルを更新
         currentProfile = data.profile;
-        updateStatusDisplay(currentProfile);
+        if (typeof updateStatusDisplay === 'function') {
+            updateStatusDisplay(currentProfile);
+        } else {
+            console.warn('[Chat] updateStatusDisplay not available yet');
+        }
 
         // 通知
         alert(`取り消しました（${data.removed_data_count}件のデータを削除）`);
