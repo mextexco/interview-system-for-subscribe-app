@@ -2,8 +2,7 @@
  * ステータス表示: カテゴリー別プログレスバー、統計情報
  */
 
-// API Base URL
-const API_BASE_URL = 'http://localhost:5001/api';
+// API_BASE_URL は index.html で定義されている
 
 const CATEGORIES = [
     "基本プロフィール",

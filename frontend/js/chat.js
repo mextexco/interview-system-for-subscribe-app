@@ -7,7 +7,7 @@ let currentUserId = null;
 let currentSessionId = null;
 let currentProfile = null;
 let messageCount = 0;
-const API_BASE_URL = 'http://localhost:5001/api';
+// API_BASE_URL は visualizer.js で定義されている
 
 /**
  * LM Studio接続チェック
