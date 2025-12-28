@@ -48,24 +48,21 @@
                     disabled
                 />
                 <button id="sendButton" disabled>送信</button>
+                <button id="undoButton" class="undo-button" title="最後のやりとりを取り消す" disabled>↩️</button>
                 <span id="speakerIcon" class="speaker-icon" title="音声出力">🔇</span>
+            </div>
+
+            <!-- 音声設定 -->
+            <div class="voice-settings">
+                <label class="voice-setting-label">
+                    <input type="checkbox" id="continuousVoiceMode" />
+                    <span>🎤 継続音声入力モード（ボタンを押すまで録音継続）</span>
+                </label>
             </div>
         </div>
 
-        <!-- 右ペイン: ビジュアライゼーション -->
+        <!-- 右ペイン: ステータス表示 -->
         <div class="right-pane">
-            <!-- 人間形成ビジュアル -->
-            <div class="human-formation" id="humanFormation">
-                <h2>人間形成</h2>
-                <div class="human-visual" id="humanVisual">
-                    <!-- SVGプレースホルダー -->
-                    <div class="stage-placeholder" id="stagePlaceholder">
-                        <div class="stage-circle stage-1"></div>
-                    </div>
-                </div>
-                <p class="stage-info" id="stageInfo">Stage 1: 輪郭のみ (0件)</p>
-            </div>
-
             <!-- バッジセクション -->
             <div class="badges-section" id="badgesSection">
                 <h3>獲得バッジ <span id="badgeCount">(0)</span></h3>
@@ -96,12 +93,21 @@
     <!-- スタート画面（モーダル） -->
     <div class="modal" id="startModal">
         <div class="modal-content">
-            <h2>インタビューを始めましょう</h2>
-            <p>あなたの性別を選択してください</p>
+            <h2>面接を始めます</h2>
+            <p>担当キャラクターを選んでください</p>
             <div class="gender-buttons">
-                <button class="gender-btn" data-gender="男性">男性</button>
-                <button class="gender-btn" data-gender="女性">女性</button>
-                <button class="gender-btn" data-gender="その他">その他</button>
+                <button class="gender-btn" data-gender="男性">
+                    <span class="char-name">青山くん</span>
+                    <span class="char-desc">落ち着いた男性</span>
+                </button>
+                <button class="gender-btn" data-gender="女性">
+                    <span class="char-name">つむぎちゃん</span>
+                    <span class="char-desc">明るい女性</span>
+                </button>
+                <button class="gender-btn" data-gender="その他">
+                    <span class="char-name">ずんだもん</span>
+                    <span class="char-desc">親しみやすい</span>
+                </button>
             </div>
         </div>
     </div>
@@ -148,7 +154,6 @@
     <script src="js/events.js"></script>
     <script src="js/chat.js"></script>
     <script src="js/character.js"></script>
-    <script src="js/human-formation.js"></script>
     <script src="js/gamification.js"></script>
     <script src="js/visualizer.js"></script>
 
@@ -165,5 +170,15 @@
             setupStatusToggle();
         });
     </script>
+
+    <!-- クレジット表記 / Credits -->
+    <div class="credits-footer">
+        <p>キャラクター画像 / Character Images:
+            ©︎ <a href="https://zunko.jp/" target="_blank">SSS合同会社/東北ずん子プロジェクト</a> (ずんだもん),
+            <a href="https://tsumugi-official.studio.site/" target="_blank">春日部つむぎ公式</a> (春日部つむぎ),
+            青山龍星公式 (青山龍星)
+        </p>
+        <p>音声合成 / Voice Synthesis: <a href="https://voicevox.hiroshiba.jp/" target="_blank">VOICEVOX</a></p>
+    </div>
 </body>
 </html>

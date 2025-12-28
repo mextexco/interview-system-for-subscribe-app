@@ -38,7 +38,9 @@ class Interviewer:
 
     def generate_system_prompt(self, character_id: str, profile: Dict,
                                category_counts: Dict[str, int],
-                               empty_categories: List[str]) -> str:
+                               empty_categories: List[str],
+                               greeting_already_sent: bool = False,
+                               session_data: Dict = None) -> str:
         """システムプロンプトを生成"""
         character = CHARACTERS.get(character_id, CHARACTERS["aoi"])
 
@@ -59,6 +61,78 @@ class Interviewer:
         # 空白カテゴリー
         empty_cats = ", ".join(empty_categories) if empty_categories else "なし"
 
+        # 名前が既に取得されているかチェック（セッションデータから）
+        user_name = None
+        if session_data and 'extracted_data' in session_data:
+            basic_profile = session_data['extracted_data'].get('基本プロフィール', [])
+            for item in basic_profile:
+                if item.get('key') == '名前' and item.get('value'):
+                    user_name = item['value']
+                    print(f"[DEBUG] Found user name in session data: {user_name}")
+                    break
+
+        # 名前がまだない場合、直前の会話から推測
+        if not user_name and session_data and 'conversation' in session_data:
+            conversation = session_data['conversation']
+            if len(conversation) >= 2:
+                # 最後から2番目がAI（名前を聞いた）、最後がユーザー（名前を答えた）
+                last_assistant = conversation[-2] if conversation[-2].get('role') == 'assistant' else None
+                last_user = conversation[-1] if conversation[-1].get('role') == 'user' else None
+
+                if last_assistant and last_user:
+                    # AIが「名前」について聞いているか
+                    if '名前' in last_assistant.get('content', ''):
+                        # ユーザーの返答が短い（名前の可能性）
+                        user_response = last_user.get('content', '').strip()
+                        if len(user_response) <= 20 and user_response:
+                            user_name = user_response
+                            print(f"[DEBUG] Inferred user name from conversation: {user_name}")
+
+
+        # 会話戦略部分を条件分岐
+        if user_name:
+            # 名前が既に分かっている場合
+            conversation_strategy = f"""【重要】
+相手の名前は「{user_name}」です。すでに名前を知っています。
+絶対に名前を聞き直したり、確認したりしないでください。
+
+【会話戦略】
+- 自然な会話でプロファイリングを続ける
+- 空白カテゴリーがあれば軽く振る（「そういえば〜」）
+- ユーザーが話したいことを優先
+- 無理に質問を続けない（3回短い回答なら話題を変える）
+- 相手の発言に共感しながら進める
+- 1語回答の場合は具体例を示して掘り下げる
+  例: 「IT」→「ITのどんなお仕事ですか？開発、インフラ、営業など」
+- 曖昧な回答には選択肢を提示
+  例: 「普通」→「朝型ですか？夜型ですか?」"""
+        elif greeting_already_sent:
+            # 挨拶だけ送った直後（名前はまだ分かっていない）
+            conversation_strategy = """【会話戦略】
+- あなたはすでに自己紹介をして、相手に名前を尋ねました
+- 相手は今その返答をしています
+- 自然な会話でプロファイリングを続ける
+- 空白カテゴリーがあれば軽く振る（「そういえば〜」）
+- ユーザーが話したいことを優先
+- 無理に質問を続けない（3回短い回答なら話題を変える）
+- 相手の発言に共感しながら進める
+- 1語回答の場合は具体例を示して掘り下げる
+  例: 「IT」→「ITのどんなお仕事ですか？開発、インフラ、営業など」
+- 曖昧な回答には選択肢を提示
+  例: 「普通」→「朝型ですか？夜型ですか?」"""
+        else:
+            conversation_strategy = """【会話戦略】
+- まず相手の名前を聞く（初回のみ）
+- その後、自然な会話でプロファイリング
+- 空白カテゴリーがあれば軽く振る（「そういえば〜」）
+- ユーザーが話したいことを優先
+- 無理に質問を続けない（3回短い回答なら話題を変える）
+- 相手の発言に共感しながら進める
+- 1語回答の場合は具体例を示して掘り下げる
+  例: 「IT」→「ITのどんなお仕事ですか？開発、インフラ、営業など」
+- 曖昧な回答には選択肢を提示
+  例: 「普通」→「朝型ですか？夜型ですか?」"""
+
         system_prompt = f"""あなたは{character['name']}、{character['description']}です。
 
 【会話スタイル】
@@ -69,17 +143,13 @@ class Interviewer:
 - テンポ良く進める
 - 自然な会話を心がける
 
-【会話戦略】
-- まず相手の名前を聞く（初回のみ）
-- その後、自然な会話でプロファイリング
-- 空白カテゴリーがあれば軽く振る（「そういえば〜」）
-- ユーザーが話したいことを優先
-- 無理に質問を続けない（3回短い回答なら話題を変える）
-- 相手の発言に共感しながら進める
-- 1語回答の場合は具体例を示して掘り下げる
-  例: 「IT」→「ITのどんなお仕事ですか？開発、インフラ、営業など」
-- 曖昧な回答には選択肢を提示
-  例: 「普通」→「朝型ですか？夜型ですか?」
+【重要な注意事項】
+- 地理・地名・距離などの事実を正確に扱う
+- 不確かな知識で推測や想像の発言をしない
+- 知らないことは素直に認める
+- 相手の発言に基づいて会話する（勝手な前提を作らない）
+
+{conversation_strategy}
 
 【プロファイリングカテゴリー】
 {categories_info}
@@ -96,7 +166,9 @@ class Interviewer:
     def get_response(self, messages: List[Dict], character_id: str,
                     profile: Dict, category_counts: Dict[str, int],
                     empty_categories: List[str],
-                    max_tokens: int = 100) -> Optional[str]:
+                    max_tokens: int = 100,
+                    greeting_already_sent: bool = False,
+                    session_data: Dict = None) -> Optional[str]:
         """
         LM Studioからレスポンスを取得
         Args:
@@ -106,13 +178,15 @@ class Interviewer:
             category_counts: カテゴリー別データ数
             empty_categories: 空のカテゴリーリスト
             max_tokens: 最大トークン数
+            greeting_already_sent: 初回挨拶が既に送信されたか
+            session_data: セッションデータ（extracted_data含む）
         Returns:
             AIの応答テキスト
         """
         try:
             # システムプロンプトを生成
             system_prompt = self.generate_system_prompt(
-                character_id, profile, category_counts, empty_categories
+                character_id, profile, category_counts, empty_categories, greeting_already_sent, session_data
             )
 
             # メッセージリストを構築
@@ -127,7 +201,7 @@ class Interviewer:
                     "model": LM_STUDIO_MODEL,
                     "messages": full_messages,
                     "max_tokens": max_tokens,
-                    "temperature": 0.8,
+                    "temperature": 0.6,  # 事実性向上のため0.8→0.6に変更
                     "stream": False
                 },
                 timeout=30
@@ -140,17 +214,33 @@ class Interviewer:
                 # デバッグ: 元のメッセージを出力
                 print(f"[DEBUG] LM Studio raw response: {assistant_message[:200]}")
 
-                # 内部コメントを除去（一時的に無効化）
-                # cleaned_message = self._clean_response(assistant_message)
-                cleaned_message = assistant_message  # 一時的に無効化
+                # 内部コメントを除去
+                cleaned_message = self._clean_response(assistant_message)
 
                 # デバッグ: クリーン後のメッセージを出力
                 print(f"[DEBUG] Cleaned response: {cleaned_message[:200]}")
                 print(f"[DEBUG] Response length - raw: {len(assistant_message)}, cleaned: {len(cleaned_message)}")
 
-                return cleaned_message.strip()
+                # 空の応答をチェック
+                final_message = cleaned_message.strip()
+                if not final_message:
+                    print(f"[WARNING] Cleaned message is empty! Raw response was: {assistant_message[:500]}")
+                    return None
+
+                return final_message
             else:
-                print(f"LM Studio error: {response.status_code}")
+                print(f"[ERROR] LM Studio error: {response.status_code}")
+                try:
+                    error_detail = response.json()
+                    print(f"[ERROR] LM Studio error detail: {error_detail}")
+                except:
+                    print(f"[ERROR] LM Studio error body: {response.text[:500]}")
+
+                # システムプロンプトの長さをチェック
+                print(f"[DEBUG] System prompt length: {len(system_prompt)} characters")
+                print(f"[DEBUG] Total messages: {len(full_messages)}")
+                print(f"[DEBUG] System prompt preview: {system_prompt[:300]}...")
+
                 return None
 
         except Exception as e:
@@ -191,7 +281,13 @@ class Interviewer:
         if user_name:
             return f"こんにちは{user_name}さん！今日もお話しましょう！"
         else:
-            return f"こんにちは！{character['name']}です。よろしくね！"
+            # キャラクターごとの初対面の挨拶
+            greetings = {
+                'misaki': "初めまして！つむぎです。今日はよろしくお願いします！",
+                'kenta': "初めまして。青山です。",
+                'aoi': "こんにちはなのだ！ずんだもんなのだ。よろしくなのだ！"
+            }
+            return greetings.get(character_id, "こんにちは！よろしくお願いします！")
 
     def generate_first_question(self, character_id: str) -> str:
         """最初の質問を生成"""

@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(__file__))
 from profile_manager import ProfileManager
 from interviewer import Interviewer
 from gamification import GamificationManager
-from config import CHARACTERS, BADGES, HUMAN_STAGES, RANDOM_EVENTS
+from config import CHARACTERS, BADGES, RANDOM_EVENTS
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -53,11 +53,11 @@ def create_user():
     name = data.get('name', '名無し')
     gender = data.get('gender', 'その他')
 
-    # 性別からキャラクターを選択
+    # 性別からキャラクターを選択（修正版）
     character_map = {
-        '男性': 'misaki',
-        '女性': 'kenta',
-        'その他': 'aoi'
+        '男性': 'kenta',      # 青山（男性キャラ）
+        '女性': 'misaki',     # つむぎ（女性キャラ）
+        'その他': 'aoi'        # ずんだもん（中性的）
     }
     character = character_map.get(gender, 'aoi')
 
@@ -106,12 +106,16 @@ def create_session():
 
     # 挨拶メッセージ
     character_id = profile['character']
-    greeting = interviewer.generate_greeting(character_id, profile.get('name'))
+    # 名前が「名無し」の場合は名前なしで挨拶
+    user_name = profile.get('name')
+    if user_name == '名無し':
+        user_name = None
+    greeting = interviewer.generate_greeting(character_id, user_name)
     first_question = interviewer.generate_first_question(character_id)
 
-    # 初期メッセージを追加
-    profile_manager.add_message(session['session_id'], 'assistant', greeting, 'smile')
-    profile_manager.add_message(session['session_id'], 'assistant', first_question, 'normal')
+    # 初期メッセージを統合して追加（LM Studioはroleが交互である必要があるため）
+    combined_message = f"{greeting}\n{first_question}"
+    profile_manager.add_message(session['session_id'], 'assistant', combined_message, 'smile')
 
     # ランダムイベントチェック
     event = gamification.should_trigger_event()
@@ -185,21 +189,44 @@ def chat():
     # 会話履歴を構築
     session = profile_manager.get_session(session_id)
     messages = []
-    for msg in session['conversation']:
+    greeting_already_sent = False
+    for i, msg in enumerate(session['conversation']):
         role = msg['role']
         content = msg['content']
+
+        # 最初のメッセージがassistantの場合はスキップ（LM Studioは user から始まる必要がある）
+        if i == 0 and role == 'assistant':
+            print(f"[DEBUG] Skipping first assistant message for LM Studio compatibility")
+            greeting_already_sent = True
+            continue
+
         messages.append({'role': role, 'content': content})
 
     # LM Studioからレスポンス取得
-    assistant_response = interviewer.get_response(
-        messages,
-        profile['character'],
-        profile,
-        category_counts,
-        empty_categories
-    )
+    print(f"[DEBUG] Calling get_response with {len(messages)} messages, character: {profile['character']}")
+    print(f"[DEBUG] Category counts: {category_counts}")
+    print(f"[DEBUG] Empty categories: {empty_categories}")
+    print(f"[DEBUG] Greeting already sent: {greeting_already_sent}")
+
+    try:
+        assistant_response = interviewer.get_response(
+            messages,
+            profile['character'],
+            profile,
+            category_counts,
+            empty_categories,
+            greeting_already_sent=greeting_already_sent,
+            session_data=session
+        )
+        print(f"[DEBUG] get_response returned: {assistant_response if assistant_response else 'EMPTY/NONE'}")
+    except Exception as e:
+        print(f"[ERROR] get_response failed with exception: {e}")
+        import traceback
+        traceback.print_exc()
+        assistant_response = None
 
     if not assistant_response:
+        print("[WARNING] No response from LM Studio, using default message")
         assistant_response = "ごめんね、ちょっと考えがまとまらなくて..."
         expression = "thinking"
 
@@ -231,12 +258,6 @@ def chat():
     for badge_name in newly_earned_badges:
         profile_manager.add_badge(user_id, badge_name)
 
-    # 人間形成ステージ更新
-    total_count = profile_manager.get_total_data_count(user_id)
-    new_stage = profile_manager.calculate_human_stage(total_count)
-    old_stage = profile.get('human_stage', 1)
-    stage_changed = new_stage > old_stage
-
     # 更新されたプロファイルを取得
     profile = profile_manager.get_user(user_id)
 
@@ -246,8 +267,6 @@ def chat():
         'expression': expression,
         'reaction': reaction_tier,
         'badges': newly_earned_badges,
-        'stage_changed': stage_changed,
-        'new_stage': new_stage,
         'profile': profile
     })
 
@@ -258,16 +277,44 @@ def get_badges():
     return jsonify(BADGES)
 
 
-@app.route('/api/stages', methods=['GET'])
-def get_stages():
-    """人間形成ステージ一覧を取得"""
-    return jsonify(HUMAN_STAGES)
-
-
 @app.route('/api/events', methods=['GET'])
 def get_events():
     """ランダムイベント一覧を取得"""
     return jsonify(RANDOM_EVENTS)
+
+
+@app.route('/api/undo', methods=['POST'])
+def undo_last_turn():
+    """最後のやりとりを取り消す"""
+    data = request.json
+    session_id = data.get('session_id')
+
+    if not session_id:
+        return jsonify({'error': 'session_id required'}), 400
+
+    try:
+        result = profile_manager.undo_last_turn(session_id)
+
+        if not result['success']:
+            return jsonify(result), 400
+
+        # 更新されたプロファイルを取得
+        session = result['session']
+        profile = profile_manager.get_user(session['user_id'])
+
+        return jsonify({
+            'success': True,
+            'message': result['message'],
+            'removed_data_count': result['removed_data_count'],
+            'session': session,
+            'profile': profile
+        })
+
+    except Exception as e:
+        print(f"[ERROR] Undo failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

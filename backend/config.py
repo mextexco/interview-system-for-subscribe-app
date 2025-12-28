@@ -16,25 +16,25 @@ SESSIONS_DIR = os.path.join(DATA_DIR, "sessions")
 # キャラクター定義
 CHARACTERS = {
     "misaki": {
-        "name": "美咲",
+        "name": "つむぎちゃん",
         "gender": "女性",
         "age": "20代後半",
         "description": "明るく聞き上手な女性",
         "tone": "フレンドリーで優しい",
-        "for_user_gender": "男性",
+        "for_user_gender": "女性",
         "expressions": ["normal", "smile", "surprised", "thinking", "empathy", "encourage"]
     },
     "kenta": {
-        "name": "健太",
+        "name": "青山くん",
         "gender": "男性",
         "age": "30代前半",
         "description": "落ち着いて知的な男性",
         "tone": "穏やかで丁寧",
-        "for_user_gender": "女性",
+        "for_user_gender": "男性",
         "expressions": ["normal", "smile", "surprised", "thinking", "empathy", "encourage"]
     },
     "aoi": {
-        "name": "あおい",
+        "name": "ずんだもん",
         "gender": "中性的",
         "age": "20代",
         "description": "親しみやすく中性的なキャラクター",
@@ -272,15 +272,6 @@ RANDOM_EVENTS = {
         "trigger_rate": 0.15
     }
 }
-
-# 人間形成ステージ
-HUMAN_STAGES = [
-    {"stage": 1, "min_data": 0, "image": "stage1.svg", "description": "輪郭のみ"},
-    {"stage": 2, "min_data": 10, "image": "stage2.svg", "description": "顔・体の輪郭"},
-    {"stage": 3, "min_data": 25, "image": "stage3.svg", "description": "服装・基本"},
-    {"stage": 4, "min_data": 50, "image": "stage4.svg", "description": "表情・アクセサリー"},
-    {"stage": 5, "min_data": 100, "image": "stage5.svg", "description": "目に光・オーラ"}
-]
 
 # リアクション設定
 REACTION_TIERS = {

@@ -100,6 +100,18 @@ async function startInterview(gender) {
             displayMessage(msg.role, msg.content, msg.expression);
         });
 
+        // 初期メッセージを音声で読み上げ
+        if (conversation.length > 0 && conversation[0].role === 'assistant') {
+            const firstMessage = conversation[0].content;
+            console.log('[Chat] Speaking initial message:', firstMessage);
+            // 少し遅延を入れて確実にVOICEVOX接続チェック後に実行
+            setTimeout(() => {
+                if (typeof speakText === 'function') {
+                    speakText(firstMessage, currentProfile.character);
+                }
+            }, 500);
+        }
+
         // モーダルを閉じる
         document.getElementById('startModal').classList.add('hidden');
 
@@ -110,11 +122,13 @@ async function startInterview(gender) {
         // 送信ボタンイベント
         setupSendButton();
 
+        // 取り消しボタンイベント
+        setupUndoButton();
+
         // 音声ボタンイベント
         setupVoiceButton();
 
         // ビジュアライゼーション初期化
-        updateHumanFormation(currentProfile.human_stage, 0);
         updateStatusDisplay(currentProfile);
 
     } catch (error) {
@@ -136,6 +150,16 @@ function setupSendButton() {
             sendMessage();
         }
     });
+}
+
+/**
+ * 取り消しボタンのセットアップ
+ */
+function setupUndoButton() {
+    const undoButton = document.getElementById('undoButton');
+    if (undoButton) {
+        undoButton.addEventListener('click', undoLastTurn);
+    }
 }
 
 /**
@@ -208,14 +232,15 @@ async function sendMessage() {
             }
         }
 
-        // ステージ変化
-        if (data.stage_changed) {
-            updateHumanFormation(data.new_stage, data.profile.total_data_count);
-        }
-
         // プロファイル更新
         currentProfile = data.profile;
         updateStatusDisplay(currentProfile);
+
+        // 取り消しボタンを有効化
+        const undoButton = document.getElementById('undoButton');
+        if (undoButton) {
+            undoButton.disabled = false;
+        }
 
         // メッセージカウントを増やす
         messageCount++;
@@ -237,6 +262,71 @@ async function sendMessage() {
         sendButton.disabled = false;
         messageInput.disabled = false;
         messageInput.focus();
+    }
+}
+
+/**
+ * 最後のやりとりを取り消す
+ */
+async function undoLastTurn() {
+    if (!currentSessionId) {
+        alert('セッションが見つかりません');
+        return;
+    }
+
+    const undoButton = document.getElementById('undoButton');
+    const chatContainer = document.getElementById('chatContainer');
+    const messages = chatContainer.querySelectorAll('.message');
+
+    // 最初のメッセージしかない場合は取り消せない
+    if (messages.length <= 1) {
+        alert('取り消せるメッセージがありません');
+        return;
+    }
+
+    // 確認ダイアログ
+    if (!confirm('最後のやりとりを取り消しますか？\n（抽出されたデータも削除されます）')) {
+        return;
+    }
+
+    // ボタンを無効化
+    undoButton.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/undo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: currentSessionId
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert(data.message || '取り消しに失敗しました');
+            return;
+        }
+
+        console.log(`[Undo] Removed ${data.removed_data_count} data points`);
+
+        // UIから最後の2つのメッセージを削除（user + assistant）
+        const messagesToRemove = Array.from(messages).slice(-2);
+        messagesToRemove.forEach(msg => msg.remove());
+
+        // プロファイルを更新
+        currentProfile = data.profile;
+        updateStatusDisplay(currentProfile);
+
+        // 通知
+        alert(`取り消しました（${data.removed_data_count}件のデータを削除）`);
+
+    } catch (error) {
+        console.error('Undo error:', error);
+        alert('取り消し中にエラーが発生しました');
+    } finally {
+        // ボタンを再有効化
+        undoButton.disabled = false;
     }
 }
 

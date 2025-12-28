@@ -220,6 +220,29 @@ body {
     cursor: not-allowed;
 }
 
+/* 取り消しボタン */
+.undo-button {
+    padding: 10px 15px;
+    background: #ff6b6b;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s ease;
+    font-weight: bold;
+}
+
+.undo-button:hover:not(:disabled) {
+    background: #ff5252;
+    transform: scale(1.05);
+}
+
+.undo-button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
 /* スピーカーアイコン */
 .speaker-icon {
     font-size: 24px;
@@ -251,116 +274,6 @@ body {
     background: #ffffff;
     overflow-y: auto;
     padding: 30px;
-}
-
-/* 人間形成ビジュアル */
-.human-formation {
-    margin-bottom: 30px;
-}
-
-.human-formation h2 {
-    color: #333;
-    margin-bottom: 20px;
-    text-align: center;
-}
-
-.human-visual {
-    width: 100%;
-    max-width: 500px;
-    height: 400px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    border-radius: 20px;
-    position: relative;
-}
-
-/* ステージプレースホルダー */
-.stage-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 320px;
-}
-
-/* 人型SVG */
-.human-svg {
-    filter: drop-shadow(0 0 10px rgba(100, 120, 200, 0.3));
-}
-
-/* オーラのアニメーション */
-.aura-glow {
-    animation: auraGlow 2s ease-in-out infinite;
-}
-
-@keyframes auraGlow {
-    0%, 100% {
-        opacity: 0.4;
-        stroke-width: 8;
-    }
-    50% {
-        opacity: 0.8;
-        stroke-width: 12;
-    }
-}
-
-/* 人型成長アニメーション */
-@keyframes humanGrow {
-    0% {
-        transform: scale(0.5);
-        opacity: 0;
-    }
-    50% {
-        transform: scale(1.1);
-    }
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-.stage-circle {
-    width: 200px;
-    height: 200px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
-    border: 4px solid rgba(255, 255, 255, 0.5);
-    transition: all 0.5s ease;
-}
-
-.stage-circle.stage-1 {
-    width: 100px;
-    height: 100px;
-}
-
-.stage-circle.stage-2 {
-    width: 150px;
-    height: 150px;
-}
-
-.stage-circle.stage-3 {
-    width: 200px;
-    height: 200px;
-}
-
-.stage-circle.stage-4 {
-    width: 250px;
-    height: 250px;
-}
-
-.stage-circle.stage-5 {
-    width: 300px;
-    height: 300px;
-    box-shadow: 0 0 30px rgba(255, 215, 0, 0.7);
-}
-
-.stage-info {
-    text-align: center;
-    margin-top: 15px;
-    color: #666;
-    font-size: 14px;
 }
 
 /* バッジセクション */
@@ -800,4 +713,108 @@ body {
     background: #f5f5f5;
     border-color: #999;
     color: #666;
+}
+
+/* 音声設定 / Voice Settings */
+.voice-settings {
+    padding: 10px 15px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+}
+
+.voice-setting-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    color: #555;
+    transition: color 0.2s ease;
+}
+
+.voice-setting-label:hover {
+    color: #667eea;
+}
+
+.voice-setting-label input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    accent-color: #667eea;
+}
+
+/* キャラクター画像スタイル（VOICEVOX対応） */
+.character-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: all 0.3s ease;
+}
+
+.avatar-placeholder {
+    overflow: visible;
+    background: transparent;
+}
+
+.avatar-placeholder .character-image {
+    max-width: 200px;
+    max-height: 200px;
+    width: auto;
+    height: auto;
+}
+
+/* クレジット表記フッター */
+.credits-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.95);
+    border-top: 1px solid #ddd;
+    padding: 8px 15px;
+    font-size: 11px;
+    color: #666;
+    text-align: center;
+    z-index: 1000;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.05);
+}
+
+.credits-footer p {
+    margin: 2px 0;
+}
+
+.credits-footer a {
+    color: #667eea;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.credits-footer a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+}
+
+/* キャラクター選択ボタンのスタイル改善 */
+.gender-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 15px 20px;
+}
+
+.char-name {
+    font-size: 18px;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.char-desc {
+    font-size: 12px;
+    color: #888;
+}
+
+.gender-btn:hover .char-name {
+    color: #764ba2;
 }

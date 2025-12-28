@@ -7,7 +7,7 @@ import os
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
-from config import PROFILES_DIR, SESSIONS_DIR, CATEGORIES, HUMAN_STAGES
+from config import PROFILES_DIR, SESSIONS_DIR, CATEGORIES
 from data_validator import DataValidator
 
 
@@ -28,7 +28,6 @@ class ProfileManager:
             "gender": gender,
             "character": character,
             "created_at": datetime.now().isoformat(),
-            "human_stage": 1,
             "badges": [],
             "total_data_count": 0,
             "sessions": []
@@ -192,9 +191,6 @@ class ProfileManager:
         session["extracted_data"][category].append(data_entry)
         self._save_session(session_id, session)
 
-        # ユーザーの総データ数と人間形成ステージを更新
-        self._update_user_stage(session["user_id"])
-
         return session
 
     def get_category_data_count(self, user_id: str) -> Dict[str, int]:
@@ -223,13 +219,6 @@ class ProfileManager:
         category_counts = self.get_category_data_count(user_id)
         return [cat for cat, count in category_counts.items() if count == 0]
 
-    def calculate_human_stage(self, data_count: int) -> int:
-        """データ数から人間形成ステージを計算"""
-        for i in range(len(HUMAN_STAGES) - 1, -1, -1):
-            if data_count >= HUMAN_STAGES[i]["min_data"]:
-                return HUMAN_STAGES[i]["stage"]
-        return 1
-
     def add_badge(self, user_id: str, badge_name: str) -> Dict:
         """バッジを追加"""
         profile = self.get_user(user_id)
@@ -254,13 +243,65 @@ class ProfileManager:
         with open(session_path, 'w', encoding='utf-8') as f:
             json.dump(session, f, ensure_ascii=False, indent=2)
 
-    def _update_user_stage(self, user_id: str):
-        """ユーザーの人間形成ステージを更新"""
-        total_count = self.get_total_data_count(user_id)
-        new_stage = self.calculate_human_stage(total_count)
+    def undo_last_turn(self, session_id: str) -> Dict:
+        """最後のターン（ユーザーメッセージ + AIレスポンス）を取り消す"""
+        session = self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
 
-        profile = self.get_user(user_id)
-        if profile:
-            profile["human_stage"] = new_stage
-            profile["total_data_count"] = total_count
-            self._save_profile(user_id, profile)
+        conversation = session.get("conversation", [])
+
+        # 会話が2件未満の場合は取り消せない（初期メッセージのみ）
+        if len(conversation) < 2:
+            print("[Undo] Not enough messages to undo")
+            return {"success": False, "message": "取り消せるメッセージがありません"}
+
+        # 最後の2つのメッセージを確認（user → assistant のペア）
+        removed_messages = []
+
+        # 最後がassistantの場合
+        if conversation[-1]["role"] == "assistant":
+            removed_messages.append(conversation.pop())
+            assistant_timestamp = removed_messages[0]["timestamp"]
+        else:
+            print("[Undo] Last message is not from assistant")
+            return {"success": False, "message": "最後のメッセージがAIの応答ではありません"}
+
+        # その前がuserの場合
+        if conversation and conversation[-1]["role"] == "user":
+            removed_messages.append(conversation.pop())
+            user_timestamp = removed_messages[1]["timestamp"]
+        else:
+            # assistantメッセージを戻す
+            conversation.append(removed_messages[0])
+            print("[Undo] No user message before assistant message")
+            return {"success": False, "message": "対応するユーザーメッセージが見つかりません"}
+
+        print(f"[Undo] Removed messages: user at {user_timestamp}, assistant at {assistant_timestamp}")
+
+        # そのターンで抽出されたデータを削除（timestampで判定）
+        removed_data_count = 0
+        for category in session["extracted_data"]:
+            data_list = session["extracted_data"][category]
+            # user_timestamp以降に抽出されたデータを削除
+            original_count = len(data_list)
+            session["extracted_data"][category] = [
+                item for item in data_list
+                if item.get("timestamp", "") < user_timestamp
+            ]
+            removed_count = original_count - len(session["extracted_data"][category])
+            if removed_count > 0:
+                print(f"[Undo] Removed {removed_count} data points from {category}")
+                removed_data_count += removed_count
+
+        # セッションを保存
+        self._save_session(session_id, session)
+
+        print(f"[Undo] Successfully removed last turn and {removed_data_count} data points")
+
+        return {
+            "success": True,
+            "message": "最後のやりとりを取り消しました",
+            "removed_data_count": removed_data_count,
+            "session": session
+        }
