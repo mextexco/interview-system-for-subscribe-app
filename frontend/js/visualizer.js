@@ -2,6 +2,9 @@
  * ステータス表示: カテゴリー別プログレスバー、統計情報
  */
 
+// API Base URL
+const API_BASE_URL = 'http://localhost:5001/api';
+
 const CATEGORIES = [
     "基本プロフィール",
     "ライフストーリー",

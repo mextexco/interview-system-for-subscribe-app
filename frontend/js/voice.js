@@ -55,7 +55,8 @@ function initSpeechRecognition() {
     const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
     recognition.continuous = continuousModeCheckbox ? continuousModeCheckbox.checked : false;
 
-    recognition.interimResults = false;
+    recognition.interimResults = true;  // 中間結果を有効にして即座の終了を防ぐ
+    recognition.maxAlternatives = 1;
 
     // 認識結果のハンドリング
     recognition.onresult = (event) => {
@@ -64,17 +65,33 @@ function initSpeechRecognition() {
         const isContinuousMode = continuousModeCheckbox && continuousModeCheckbox.checked;
 
         let transcript = '';
+        let isFinal = false;
+
         if (isContinuousMode) {
-            // 継続モード: 全ての認識結果を結合
+            // 継続モード: 全ての確定結果を結合
             for (let i = 0; i < event.results.length; i++) {
-                transcript += event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    transcript += event.results[i][0].transcript;
+                    isFinal = true;
+                }
             }
         } else {
-            // 通常モード: 最後の結果のみ
-            transcript = event.results[0][0].transcript;
+            // 通常モード: 最後の確定結果のみ
+            for (let i = event.results.length - 1; i >= 0; i--) {
+                if (event.results[i].isFinal) {
+                    transcript = event.results[i][0].transcript;
+                    isFinal = true;
+                    break;
+                }
+            }
         }
 
-        console.log('[Voice] Recognition result:', transcript);
+        // 確定結果がない場合は何もしない（中間結果は無視）
+        if (!isFinal || !transcript.trim()) {
+            return;
+        }
+
+        console.log('[Voice] Recognition result (final):', transcript);
 
         // 認識したテキストを入力欄に設定
         const messageInput = document.getElementById('messageInput');
