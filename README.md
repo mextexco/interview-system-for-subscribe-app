@@ -12,22 +12,30 @@
 - **Backend**: Python 3.10+, Flask
 - **LLM**: LM Studio (http://localhost:1234/v1/chat/completions)
   - 推奨モデル: Qwen2.5:7b, Gemma2:9b
-- **Frontend**: HTML/CSS/JavaScript (バニラJS)
-- **Visualization**: D3.js または Vis.js
-- **音声**: Web Speech API (フェーズ2)
+- **Frontend**: HTML/CSS/JavaScript (バニラJS + React)
+- **Visualization**: ReactFlow (インタラクティブマインドマップ)
+- **音声**: VOICEVOX + Web Speech API
 
 ## セットアップ
 
 ### 必要要件
 
 - Python 3.10以上
+- Node.js 18以上 (プロファイルビジュアライザーのビルド用)
 - LM Studio (起動済み、ポート1234で待機)
+- VOICEVOX (音声合成用、オプション)
 
 ### インストール
 
 ```bash
-# 依存パッケージのインストール
+# Python依存パッケージのインストール
 pip install -r requirements.txt
+
+# Node.js依存パッケージのインストール
+npm install
+
+# Reactコンポーネントのビルド
+npm run build
 
 # Flaskサーバーの起動
 python backend/app.py
@@ -42,9 +50,16 @@ python backend/app.py
 
 ## 機能
 
+### プロファイルビジュアライゼーション
+
+- **インタラクティブマインドマップ**: ReactFlowによるリアルタイム可視化
+  - 円形レイアウトとウォーターフォールレイアウトの切り替え
+  - ノードの折りたたみ/展開機能
+  - 新規データの自動フォーカス&アニメーション
+  - カテゴリー → サブカテゴリー → 値の3階層表示
+
 ### ゲーミフィケーション要素
 
-- **人間形成ビジュアル**: 5段階で「人間像」が成長
 - **バッジシステム**: 10種類の獲得可能バッジ
 - **ランダムイベント**: 会話を盛り上げるミニゲーム
 - **リアクション演出**: 3段階のビジュアルフィードバック
@@ -74,11 +89,25 @@ python backend/app.py
 
 ```
 interview-system/
-├── backend/           # Flaskバックエンド
-├── frontend/          # HTML/CSS/JSフロントエンド
-├── data/              # ユーザーデータ保存先
-├── requirements.txt   # Python依存パッケージ
-└── README.md          # このファイル
+├── backend/                 # Flaskバックエンド
+│   ├── app.py              # メインアプリケーション
+│   ├── interviewer.py      # LLMインタビューロジック
+│   ├── profile_manager.py  # プロファイル管理
+│   └── ...
+├── frontend/               # フロントエンド
+│   ├── index.html         # メインHTML
+│   ├── css/               # スタイルシート
+│   ├── js/                # Vanilla JavaScript
+│   ├── react/             # Reactコンポーネント (ソース)
+│   │   ├── ProfileVisualizer.jsx
+│   │   └── main.jsx
+│   └── dist/              # Reactビルド出力
+│       └── assets/
+├── data/                   # ユーザーデータ保存先
+├── requirements.txt        # Python依存パッケージ
+├── package.json           # Node.js依存パッケージ
+├── vite.config.js         # Viteビルド設定
+└── README.md              # このファイル
 ```
 
 ## ライセンス

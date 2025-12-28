@@ -27,6 +27,11 @@ ENV/
 data/profiles/
 data/sessions/
 
+# Node
+node_modules/
+frontend/dist/
+package-lock.json
+
 # OS
 .DS_Store
 .DS_Store?

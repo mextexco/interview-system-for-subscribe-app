@@ -61,8 +61,14 @@
             </div>
         </div>
 
-        <!-- 右ペイン: ステータス表示 -->
+        <!-- 右ペイン: プロファイルビジュアライゼーション -->
         <div class="right-pane">
+            <!-- プロファイルマインドマップ -->
+            <div class="profile-visualizer-section">
+                <h3>プロファイルマップ</h3>
+                <div id="profileVisualizerContainer" style="width: 100%; height: 500px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;"></div>
+            </div>
+
             <!-- バッジセクション -->
             <div class="badges-section" id="badgesSection">
                 <h3>獲得バッジ <span id="badgeCount">(0)</span></h3>
@@ -157,7 +163,14 @@
     <script src="js/gamification.js"></script>
     <script src="js/visualizer.js"></script>
 
+    <!-- React Profile Visualizer -->
+    <link rel="stylesheet" href="dist/assets/visualizer.css">
+    <script type="module" src="dist/assets/visualizer.js"></script>
+
     <script>
+        // プロファイルビジュアライザーのインスタンス
+        let profileVisualizer = null;
+
         // アプリ初期化
         document.addEventListener('DOMContentLoaded', () => {
             // LM Studio接続チェック
@@ -168,6 +181,16 @@
 
             // ステータスセクション折りたたみ
             setupStatusToggle();
+
+            // プロファイルビジュアライザー初期化（少し遅延させてReactの読み込みを待つ）
+            setTimeout(() => {
+                if (window.initProfileVisualizer) {
+                    profileVisualizer = window.initProfileVisualizer('profileVisualizerContainer');
+                    console.log('[App] Profile Visualizer initialized');
+                } else {
+                    console.error('[App] initProfileVisualizer not found');
+                }
+            }, 100);
         });
     </script>
 

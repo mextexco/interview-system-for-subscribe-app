@@ -36,8 +36,51 @@ async function updateStatusDisplay(profile) {
         // バッジ表示を更新
         updateBadgesDisplay(profile.badges);
 
+        // プロファイルビジュアライザーを更新
+        updateProfileVisualizer(profile);
+
     } catch (error) {
         console.error('Update status error:', error);
+    }
+}
+
+/**
+ * プロファイルビジュアライザーを更新
+ */
+async function updateProfileVisualizer(profile) {
+    try {
+        if (!window.profileVisualizer) {
+            console.log('[Visualizer] Profile visualizer not initialized yet');
+            return;
+        }
+
+        // 最新のセッションを取得
+        if (!profile.sessions || profile.sessions.length === 0) {
+            console.log('[Visualizer] No sessions yet');
+            return;
+        }
+
+        const latestSessionId = profile.sessions[profile.sessions.length - 1];
+        const sessionResponse = await fetch(`${API_BASE_URL}/session/${latestSessionId}`);
+        const sessionData = await sessionResponse.json();
+
+        // セッションの extracted_data を取得
+        const extractedData = sessionData.extracted_data || {};
+
+        // ユーザー名を取得（基本プロフィールから）
+        let userName = '-';
+        const basicProfile = extractedData['基本プロフィール'] || [];
+        const nameItem = basicProfile.find(item => item.key === '名前');
+        if (nameItem) {
+            userName = typeof nameItem.value === 'object' ? nameItem.value.original : nameItem.value;
+        }
+
+        // Reactコンポーネントを更新
+        window.profileVisualizer.update(extractedData, userName);
+        console.log('[Visualizer] Profile visualizer updated with data:', extractedData);
+
+    } catch (error) {
+        console.error('[Visualizer] Update profile visualizer error:', error);
     }
 }
 

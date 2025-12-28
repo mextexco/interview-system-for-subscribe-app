@@ -276,6 +276,18 @@ body {
     padding: 30px;
 }
 
+/* プロファイルビジュアライザーセクション */
+.profile-visualizer-section {
+    margin-bottom: 30px;
+}
+
+.profile-visualizer-section h3 {
+    color: #333;
+    margin-bottom: 15px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
 /* バッジセクション */
 .badges-section {
     margin-bottom: 30px;
