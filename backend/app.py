@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import sys
+import threading
 
 # 現在のディレクトリをパスに追加
 sys.path.append(os.path.dirname(__file__))
@@ -33,10 +34,12 @@ def index():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """ヘルスチェック"""
+    from config import LM_STUDIO_MODEL
     lm_studio_connected = interviewer.check_lm_studio_connection()
     return jsonify({
         'status': 'ok',
-        'lm_studio': 'connected' if lm_studio_connected else 'disconnected'
+        'lm_studio': 'connected' if lm_studio_connected else 'disconnected',
+        'model': LM_STUDIO_MODEL
     })
 
 
@@ -80,6 +83,9 @@ def get_user(user_id):
 
     # カテゴリー別データ数を取得
     category_counts = profile_manager.get_category_data_count(user_id)
+
+    # 総データ数を計算してプロファイルに追加（リアルタイム計算）
+    profile['total_data_count'] = sum(category_counts.values())
 
     return jsonify({
         'profile': profile,
@@ -153,7 +159,7 @@ def chat():
     if not session_id or not user_message:
         return jsonify({'error': 'session_id and message required'}), 400
 
-    # セッション取得
+    # セッション取得（1回のみ）
     session = profile_manager.get_session(session_id)
     if not session:
         return jsonify({'error': 'Session not found'}), 404
@@ -164,8 +170,54 @@ def chat():
     if not profile:
         return jsonify({'error': 'User not found'}), 404
 
+    # 削除リクエスト検出（「今の削除して」「やめます」など）
+    is_deletion_request = interviewer.detect_deletion_request(user_message)
+
+    if is_deletion_request:
+        print(f"[Deletion] User is requesting to delete previous response - auto-undoing last turn")
+        # 前のターンを自動的に取り消す
+        undo_result = profile_manager.undo_last_turn(session_id)
+
+        if undo_result['success']:
+            print(f"[Deletion] Auto-undo successful, removed {undo_result['removed_data_count']} data points")
+
+            # 更新されたプロファイルを取得
+            profile = profile_manager.get_user(user_id)
+
+            # 削除リクエストメッセージ自体は保存せず、確認メッセージのみ返す
+            return jsonify({
+                'success': True,
+                'response': '承知しました！前の回答を削除しました。',
+                'expression': 'smile',
+                'reaction': 'none',
+                'badges': [],
+                'profile': profile,
+                'deletion_request': True,  # 削除リクエストフラグ
+                'removed_count': undo_result['removed_data_count']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': undo_result['message']
+            }), 400
+
+    # 訂正検出（ユーザーが前の回答を訂正している場合）
+    is_correction = interviewer.detect_correction(user_message, session['conversation'])
+
+    if is_correction:
+        print(f"[Correction] User is correcting previous response - auto-undoing last turn")
+        # 前のターンを自動的に取り消す
+        undo_result = profile_manager.undo_last_turn(session_id)
+        if undo_result['success']:
+            print(f"[Correction] Auto-undo successful, removed {undo_result['removed_data_count']} data points")
+        else:
+            print(f"[Correction] Auto-undo failed: {undo_result['message']}")
+
     # ユーザーメッセージを保存
     profile_manager.add_message(session_id, 'user', user_message)
+
+    # セッションを再取得（ユーザーメッセージが追加された最新の状態を取得）
+    session = profile_manager.get_session(session_id)
 
     # メッセージ分析
     message_analysis = gamification.analyze_message_for_data(user_message)
@@ -175,7 +227,6 @@ def chat():
 
     # セッションにリアクション記録
     if reaction_tier != "none":
-        session = profile_manager.get_session(session_id)
         session['reactions'][reaction_tier] = session['reactions'].get(reaction_tier, 0) + 1
         profile_manager.update_session(session_id, session)
 
@@ -186,8 +237,7 @@ def chat():
     category_counts = profile_manager.get_category_data_count(user_id)
     empty_categories = profile_manager.get_empty_categories(user_id)
 
-    # 会話履歴を構築
-    session = profile_manager.get_session(session_id)
+    # 会話履歴を構築（最新のsessionオブジェクトを使用）
     messages = []
     greeting_already_sent = False
     for i, msg in enumerate(session['conversation']):
@@ -223,37 +273,29 @@ def chat():
         print(f"[ERROR] get_response failed with exception: {e}")
         import traceback
         traceback.print_exc()
-        assistant_response = None
+        return jsonify({
+            'success': False,
+            'error': 'LM Studioとの接続でエラーが発生しました。LM Studioが起動しているか確認してください。'
+        }), 503
 
     if not assistant_response:
-        print("[WARNING] No response from LM Studio, using default message")
-        assistant_response = "ごめんね、ちょっと考えがまとまらなくて..."
-        expression = "thinking"
+        print("[ERROR] No response from LM Studio")
+        # LM Studio接続確認
+        if not interviewer.check_lm_studio_connection():
+            return jsonify({
+                'success': False,
+                'error': 'LM Studioとの接続が切れました。LM Studioが起動しているか確認してください。'
+            }), 503
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'LM Studioから応答がありませんでした。モデルが読み込まれているか確認してください。'
+            }), 500
 
     # アシスタントメッセージを保存
     profile_manager.add_message(session_id, 'assistant', assistant_response, expression)
 
-    # プロファイリングデータ抽出
-    extracted_data = interviewer.extract_profile_data(
-        user_message,
-        assistant_response,
-        messages
-    )
-
-    # 抽出したデータを保存
-    for data_point in extracted_data:
-        try:
-            profile_manager.add_extracted_data(
-                session_id,
-                data_point['category'],
-                data_point['key'],
-                data_point['value']
-            )
-            print(f"[Data] Saved: {data_point['category']} - {data_point['key']}: {data_point['value']}")
-        except Exception as e:
-            print(f"[Data] Error saving data point: {e}")
-
-    # バッジチェック
+    # バッジチェック（軽量処理なので同期的に実行）
     newly_earned_badges = gamification.check_badges(profile, message_analysis)
     for badge_name in newly_earned_badges:
         profile_manager.add_badge(user_id, badge_name)
@@ -261,13 +303,53 @@ def chat():
     # 更新されたプロファイルを取得
     profile = profile_manager.get_user(user_id)
 
+    # 🚀 非同期処理: データ抽出をバックグラウンドで実行
+    def extract_data_async():
+        """バックグラウンドでデータ抽出を実行"""
+        try:
+            # 最新のセッションデータを取得
+            updated_session = profile_manager.get_session(session_id)
+
+            # プロファイリングデータ抽出
+            extracted_data = interviewer.extract_profile_data(
+                user_message,
+                assistant_response,
+                updated_session['conversation']
+            )
+
+            # 抽出したデータを保存
+            for data_point in extracted_data:
+                try:
+                    profile_manager.add_extracted_data(
+                        session_id,
+                        data_point['category'],
+                        data_point['key'],
+                        data_point['value']
+                    )
+                    print(f"[Data] Saved: {data_point['category']} - {data_point['key']}: {data_point['value']}")
+                except Exception as e:
+                    print(f"[Data] Error saving data point: {e}")
+
+            print(f"[Async] Data extraction completed for session {session_id}")
+        except Exception as e:
+            print(f"[Async] Error in background data extraction: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # バックグラウンドスレッドでデータ抽出を開始
+    extraction_thread = threading.Thread(target=extract_data_async, daemon=True)
+    extraction_thread.start()
+    print(f"[Async] Started background data extraction for session {session_id}")
+
+    # すぐにレスポンスを返す（データ抽出の完了を待たない）
     return jsonify({
         'success': True,
         'response': assistant_response,
         'expression': expression,
         'reaction': reaction_tier,
         'badges': newly_earned_badges,
-        'profile': profile
+        'profile': profile,
+        'correction_detected': is_correction  # 訂正が検出されたかをフロントエンドに通知
     })
 
 

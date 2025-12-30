@@ -7,6 +7,8 @@ let recognition = null;
 let isRecording = false;
 let hasReceivedResult = false;  // 結果を受信したかどうか
 let recognitionTimeout = null;  // タイムアウト管理用
+let restartCount = 0;  // 再起動回数
+const MAX_RESTARTS = 3;  // 最大再起動回数
 
 // 音声合成の設定
 const synth = window.speechSynthesis;
@@ -114,18 +116,37 @@ function initSpeechRecognition() {
     };
 
     recognition.onerror = (event) => {
-        console.error('[Voice] Recognition error:', event.error);
-        stopRecording();
+        console.error('[Voice] Recognition error:', event.error, 'Message:', event.message);
+        console.log('[Voice] Error details - Type:', event.error, 'Timestamp:', new Date().toISOString());
 
+        // エラーの種類に応じて処理
         if (event.error === 'no-speech') {
-            showVoiceError('音声が検出されませんでした');
+            console.log('[Voice] No speech detected - this might be normal if user hasn\'t spoken yet');
+            // no-speechの場合は、再起動ロジックに任せる（stopRecordingを呼ばない）
+            return;
         } else if (event.error === 'not-allowed') {
+            stopRecording();
             showVoiceError('マイクへのアクセスが許可されていません');
+        } else if (event.error === 'audio-capture') {
+            stopRecording();
+            showVoiceError('マイクからの音声キャプチャに失敗しました');
+        } else if (event.error === 'network') {
+            stopRecording();
+            showVoiceError('ネットワークエラーが発生しました');
+        } else {
+            stopRecording();
+            showVoiceError('音声認識エラー: ' + event.error);
         }
     };
 
+    recognition.onstart = () => {
+        console.log('[Voice] Recognition actually started');
+    };
+
     recognition.onend = () => {
-        console.log('[Voice] Recognition ended, hasReceivedResult:', hasReceivedResult);
+        const timestamp = new Date().toISOString();
+        console.log(`[Voice] Recognition ended at ${timestamp}`);
+        console.log(`[Voice] State: hasReceivedResult=${hasReceivedResult}, restartCount=${restartCount}, isRecording=${isRecording}`);
 
         // タイムアウトをクリア
         if (recognitionTimeout) {
@@ -137,19 +158,34 @@ function initSpeechRecognition() {
         const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
         const isContinuousMode = continuousModeCheckbox && continuousModeCheckbox.checked;
 
-        // まだ録音中で結果を受信していない場合は再起動
-        if (isRecording && !hasReceivedResult) {
-            console.log('[Voice] No result received, restarting recognition...');
-            try {
-                recognition.start();
-                return;  // 再起動したので終了処理はスキップ
-            } catch (error) {
-                console.error('[Voice] Failed to restart recognition:', error);
-            }
+        // まだ録音中で結果を受信していない場合は再起動（制限付き）
+        if (isRecording && !hasReceivedResult && restartCount < MAX_RESTARTS) {
+            restartCount++;
+            console.log('[Voice] No result received, restarting recognition... (attempt', restartCount, '/', MAX_RESTARTS, ')');
+
+            // 再起動前に少し待機（連続再起動を防ぐ）
+            setTimeout(() => {
+                try {
+                    console.log('[Voice] Attempting to restart recognition now...');
+                    recognition.start();
+                } catch (error) {
+                    console.error('[Voice] Failed to restart recognition:', error);
+                    stopRecording();
+                    showVoiceError('音声認識の開始に失敗しました。マイクの設定を確認してください。');
+                }
+            }, 500);  // 500ms待機
+            return;  // 再起動処理を開始したので終了処理はスキップ
+        } else if (isRecording && !hasReceivedResult && restartCount >= MAX_RESTARTS) {
+            // 再起動制限に達した
+            console.log('[Voice] Max restarts reached, stopping...');
+            stopRecording();
+            showVoiceError('音声が検出されませんでした。マイクが正しく接続されているか確認してください。');
+            return;
         }
 
         if (!isContinuousMode && isRecording) {
             // 通常モード: 自動停止したのでクリーンアップ
+            console.log('[Voice] Normal mode: auto-stopping');
             stopRecording();
         } else if (isContinuousMode && isRecording) {
             // 継続モードで isRecording がまだ true の場合（予期しない停止）
@@ -157,15 +193,51 @@ function initSpeechRecognition() {
             isRecording = false;
             updateMicButton(false);
         }
+
+        // リセット
+        if (!isRecording || hasReceivedResult) {
+            console.log('[Voice] Resetting restartCount to 0');
+            restartCount = 0;
+        }
     };
 
     return true;
 }
 
 /**
+ * マイクの権限と利用可能性をチェック
+ */
+async function checkMicrophoneAccess() {
+    try {
+        console.log('[Voice] Checking microphone access...');
+
+        // マイク権限をリクエスト
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // 権限が取得できたらストリームを閉じる
+        stream.getTracks().forEach(track => track.stop());
+
+        console.log('[Voice] Microphone access granted');
+        return true;
+    } catch (error) {
+        console.error('[Voice] Microphone access error:', error);
+
+        if (error.name === 'NotAllowedError') {
+            showVoiceError('マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。');
+        } else if (error.name === 'NotFoundError') {
+            showVoiceError('マイクが見つかりません。マイクが接続されているか確認してください。');
+        } else {
+            showVoiceError('マイクへのアクセスに失敗しました: ' + error.message);
+        }
+
+        return false;
+    }
+}
+
+/**
  * 音声認識を開始
  */
-function startRecording() {
+async function startRecording() {
     if (!recognition) {
         if (!initSpeechRecognition()) {
             alert('音声認識が利用できません。ブラウザを確認してください。');
@@ -178,28 +250,39 @@ function startRecording() {
         return;
     }
 
+    // マイクアクセスをチェック
+    const hasAccess = await checkMicrophoneAccess();
+    if (!hasAccess) {
+        console.log('[Voice] Microphone access denied, aborting');
+        return;
+    }
+
     try {
         // 録音開始時に継続モードのチェックボックス状態を反映
         const continuousModeCheckbox = document.getElementById('continuousVoiceMode');
         recognition.continuous = continuousModeCheckbox ? continuousModeCheckbox.checked : false;
 
         hasReceivedResult = false;  // 結果受信フラグをリセット
+        restartCount = 0;  // 再起動カウントをリセット
 
+        console.log('[Voice] Starting recognition... (continuous mode:', recognition.continuous, ')');
         recognition.start();
         isRecording = true;
         updateMicButton(true);
-        console.log('[Voice] Recording started (continuous mode:', recognition.continuous, ')');
 
-        // 10秒後に自動停止（ユーザーが話さない場合のフェイルセーフ）
+        // 15秒後に自動停止（ユーザーが話さない場合のフェイルセーフ）
         recognitionTimeout = setTimeout(() => {
             if (isRecording && !hasReceivedResult) {
-                console.log('[Voice] Recognition timeout - no speech detected');
+                console.log('[Voice] Recognition timeout - no speech detected after 15 seconds');
                 stopRecording();
-                showVoiceError('音声が検出されませんでした。もう一度お試しください。');
+                showVoiceError('音声が検出されませんでした。マイクが正しく動作しているか確認してください。');
             }
-        }, 10000);
+        }, 15000);
     } catch (error) {
         console.error('[Voice] Failed to start recording:', error);
+        isRecording = false;
+        updateMicButton(false);
+        showVoiceError('音声認識を開始できませんでした: ' + error.message);
     }
 }
 
@@ -550,11 +633,41 @@ async function initVoiceFeatures() {
         }
     }
 
+    // スペースキーでマイクオンオフ
+    setupSpacebarControl();
+
     if (voicevoxAvailable) {
         console.log('[Voice] Voice features initialized with VOICEVOX 🎵');
     } else {
         console.log('[Voice] Voice features initialized with Web Speech API');
     }
+}
+
+/**
+ * スペースキーでマイクをオンオフする機能を設定
+ */
+function setupSpacebarControl() {
+    document.addEventListener('keydown', (event) => {
+        // スペースキーが押された場合
+        if (event.code === 'Space' || event.key === ' ') {
+            // 入力フィールドにフォーカスがある場合は何もしない
+            const activeElement = document.activeElement;
+            if (activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.isContentEditable
+            )) {
+                return;
+            }
+
+            // デフォルトのスペース動作（スクロール）を防ぐ
+            event.preventDefault();
+
+            // マイクをトグル
+            console.log('[Voice] Spacebar pressed - toggling microphone');
+            startRecording();
+        }
+    });
 }
 
 // ページ読み込み時に音声機能を初期化

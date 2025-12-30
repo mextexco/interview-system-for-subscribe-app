@@ -172,6 +172,17 @@ class ProfileManager:
         if normalization_occurred:
             print(f"[Normalization] {category}/{key}: '{value}' → {normalized_value}")
 
+        # 重複チェック / Check for duplicates
+        # 同じカテゴリー・キー・値の組み合わせが既に存在する場合はスキップ
+        for existing_item in existing_data:
+            if existing_item.get("key") == key:
+                existing_value = existing_item.get("value")
+
+                # 値の比較（正規化された値同士で比較）
+                if self._values_are_equal(normalized_value, existing_value):
+                    print(f"[Duplicate] Skipping duplicate data: {category}/{key} = {value}")
+                    return session
+
         # データエントリ作成 / Create data entry
         data_entry = {
             "key": key,
@@ -192,6 +203,21 @@ class ProfileManager:
         self._save_session(session_id, session)
 
         return session
+
+    def _values_are_equal(self, value1: any, value2: any) -> bool:
+        """
+        2つの値が等しいかチェック
+        Check if two values are equal (handles both simple types and dict/list)
+        """
+        # 両方とも辞書型の場合
+        if isinstance(value1, dict) and isinstance(value2, dict):
+            # originalフィールドで比較（正規化された値の場合）
+            v1_original = value1.get("original", value1)
+            v2_original = value2.get("original", value2)
+            return str(v1_original).strip().lower() == str(v2_original).strip().lower()
+
+        # 文字列として比較（大文字小文字を無視、前後の空白を除去）
+        return str(value1).strip().lower() == str(value2).strip().lower()
 
     def get_category_data_count(self, user_id: str) -> Dict[str, int]:
         """各カテゴリーのデータ数を取得"""

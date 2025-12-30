@@ -7,30 +7,28 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- ヘッダー -->
-    <header class="header">
-        <div class="header-left">
-            <span class="header-icon">🎤</span>
-            <span class="header-title">Interview</span>
-        </div>
-        <div class="header-center">
-            <span class="lm-status" id="lmStatus">LM Studio: <span id="lmStatusText">確認中...</span></span>
-        </div>
-        <div class="header-right">
-            <span id="characterName">-</span>
-        </div>
-    </header>
-
     <!-- メインコンテナ -->
     <div class="main-container">
         <!-- 左ペイン: チャット -->
         <div class="left-pane">
             <!-- キャラクターアバター -->
             <div class="character-avatar" id="characterAvatar">
-                <div class="avatar-placeholder">
-                    <span id="avatarEmoji">👤</span>
+                <div class="avatar-info">
+                    <div class="app-title">
+                        <span class="app-icon">🎤</span>
+                        <span class="app-name">Interview</span>
+                    </div>
+                    <div class="avatar-placeholder">
+                        <span id="avatarEmoji">👤</span>
+                    </div>
+                    <p class="character-name" id="characterNameDisplay">-</p>
+                    <div class="status-info">
+                        <div class="lm-status" id="lmStatus">
+                            <span id="lmStatusText">確認中...</span>
+                        </div>
+                        <div class="model-name" id="modelName">-</div>
+                    </div>
                 </div>
-                <p class="character-name" id="characterNameDisplay">-</p>
             </div>
 
             <!-- チャット領域 -->
@@ -63,17 +61,28 @@
 
         <!-- 右ペイン: プロファイルビジュアライゼーション -->
         <div class="right-pane">
+            <!-- 最近の抽出データ -->
+            <div class="recent-data-section">
+                <div class="recent-data-list" id="recentDataList">
+                    <p class="no-data">まだデータがありません</p>
+                </div>
+            </div>
+
             <!-- プロファイルマインドマップ -->
             <div class="profile-visualizer-section">
-                <h3>プロファイルマップ</h3>
-                <div id="profileVisualizerContainer" style="width: 100%; height: 500px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;"></div>
+                <div id="profileVisualizerContainer" style="width: 100%; height: calc(100vh - 150px); min-height: 600px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;"></div>
             </div>
 
             <!-- バッジセクション -->
             <div class="badges-section" id="badgesSection">
-                <h3>獲得バッジ <span id="badgeCount">(0)</span></h3>
-                <div class="badges-container" id="badgesContainer">
-                    <p class="no-badges">まだバッジがありません</p>
+                <h3 class="collapsible" id="badgesToggle">
+                    獲得バッジ <span id="badgeCount">(0)</span>
+                    <span class="toggle-icon">▼</span>
+                </h3>
+                <div class="badges-content" id="badgesContent">
+                    <div class="badges-container" id="badgesContainer">
+                        <p class="no-badges">まだバッジがありません</p>
+                    </div>
                 </div>
             </div>
 
@@ -210,12 +219,7 @@
 
     <!-- クレジット表記 / Credits -->
     <div class="credits-footer">
-        <p>キャラクター画像 / Character Images:
-            ©︎ <a href="https://zunko.jp/" target="_blank">SSS合同会社/東北ずん子プロジェクト</a> (ずんだもん),
-            <a href="https://tsumugi-official.studio.site/" target="_blank">春日部つむぎ公式</a> (春日部つむぎ),
-            青山龍星公式 (青山龍星)
-        </p>
-        <p>音声合成 / Voice Synthesis: <a href="https://voicevox.hiroshiba.jp/" target="_blank">VOICEVOX</a></p>
+        <p>©︎ <a href="https://zunko.jp/" target="_blank">SSS/東北ずん子</a> (ずんだもん) | <a href="https://tsumugi-official.studio.site/" target="_blank">春日部つむぎ</a> | 青山龍星 | <a href="https://voicevox.hiroshiba.jp/" target="_blank">VOICEVOX</a></p>
     </div>
 </body>
 </html>

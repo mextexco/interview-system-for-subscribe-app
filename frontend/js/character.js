@@ -43,9 +43,6 @@ function setupCharacter(characterId) {
     const characterData = getCharacterData(characterId);
     const characterImages = CHARACTER_IMAGES[characterId];
 
-    // ヘッダーにキャラクター名を表示
-    document.getElementById('characterName').textContent = characterData.name;
-
     // アバターエリアにキャラクター画像を表示
     const avatarEmoji = document.getElementById('avatarEmoji');
 

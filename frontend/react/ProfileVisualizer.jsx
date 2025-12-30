@@ -22,58 +22,16 @@ const ProfileVisualizer = ({ data, userName }) => {
     const [layoutMode, setLayoutMode] = React.useState('circular');
     const [newItemIds, setNewItemIds] = React.useState(new Set());
     const [collapsedNodes, setCollapsedNodes] = React.useState(new Set());
-    const previousDataLengthRef = React.useRef(0);
-    const currentNewItemIdsRef = React.useRef(new Set());
+    const previousDataRef = React.useRef({});
 
     // Update graph when new data comes in OR layout mode changes
     useEffect(() => {
-        if (!data) return;
-
-        // Detect newly added items
-        currentNewItemIdsRef.current = new Set();
-        const totalItems = Object.values(data).flat().length;
-
-        if (totalItems > previousDataLengthRef.current) {
-            const newDataCount = totalItems - previousDataLengthRef.current;
-
-            // Build hierarchy to get proper IDs
-            const tempHierarchy = {};
-            Object.entries(data).forEach(([category, items]) => {
-                if (!tempHierarchy[category]) {
-                    tempHierarchy[category] = {};
-                }
-                items.forEach(item => {
-                    const subcat = item.key || 'その他';
-                    const value = typeof item.value === 'object' ? item.value.original : item.value;
-                    if (!tempHierarchy[category][subcat]) {
-                        tempHierarchy[category][subcat] = [];
-                    }
-                    tempHierarchy[category][subcat].push(value);
-                });
-            });
-
-            // Mark the newest items (last N items added)
-            let itemCount = 0;
-            let startMarking = false;
-            Object.entries(tempHierarchy).forEach(([cat, subcats]) => {
-                Object.entries(subcats).forEach(([subcat, values]) => {
-                    values.forEach((value, valIndex) => {
-                        itemCount++;
-                        if (itemCount > previousDataLengthRef.current) {
-                            startMarking = true;
-                        }
-                        if (startMarking) {
-                            const valNodeId = `val-${cat}-${subcat}-${valIndex}`;
-                            currentNewItemIdsRef.current.add(valNodeId);
-                        }
-                    });
-                });
-            });
-
-            previousDataLengthRef.current = totalItems;
-        } else if (!data || totalItems === 0) {
-            previousDataLengthRef.current = 0;
+        if (!data) {
+            previousDataRef.current = {};
+            return;
         }
+
+        console.log('[ProfileVisualizer] Processing data update');
 
         // Create user node with dynamic name
         const initialNodes = [
@@ -93,31 +51,70 @@ const ProfileVisualizer = ({ data, userName }) => {
         const newNodes = [...initialNodes];
         const newEdges = [];
 
-        // Helper to get existing position if available
-        const getExistingPosition = (id, defaultPos) => {
-            if (!rfInstance) return defaultPos;
-            const existingNode = rfInstance.getNodes().find(n => n.id === id);
-            return existingNode ? existingNode.position : defaultPos;
-        };
-
         // Group by category, then subcategory (key)
+        // Also build a map to track which items are new
         const hierarchy = {};
+        const itemToNodeId = new Map(); // Maps "category|subcat|value" to node ID
+
         Object.entries(data).forEach(([category, items]) => {
             if (!hierarchy[category]) {
                 hierarchy[category] = {};
             }
             items.forEach(item => {
                 const subcat = item.key || 'その他';
-                const value = typeof item.value === 'object' ? item.value.original : item.value;
+                // Use original_value if normalization occurred, otherwise use value
+                const value = item.original_value || item.value;
 
                 if (!hierarchy[category][subcat]) {
                     hierarchy[category][subcat] = [];
                 }
+                const valIndex = hierarchy[category][subcat].length;
                 hierarchy[category][subcat].push(value);
+
+                // Store mapping
+                const itemKey = `${category}|${subcat}|${value}`;
+                const nodeId = `val-${category}-${subcat}-${valIndex}`;
+                itemToNodeId.set(itemKey, nodeId);
             });
         });
 
-        const categoryKeys = Object.keys(hierarchy);
+        // Re-detect new items using the correct node IDs
+        const correctNewIds = new Set();
+        Object.entries(data).forEach(([category, items]) => {
+            const prevCategoryData = previousDataRef.current[category] || [];
+
+            items.forEach(item => {
+                const subcat = item.key || 'その他';
+                // Use original_value if normalization occurred, otherwise use value
+                const value = item.original_value || item.value;
+
+                // Check if this exact item existed before
+                const existedBefore = prevCategoryData.some(prevItem => {
+                    const prevSubcat = prevItem.key || 'その他';
+                    const prevValue = prevItem.original_value || prevItem.value;
+                    return prevSubcat === subcat && prevValue === value;
+                });
+
+                if (!existedBefore) {
+                    const itemKey = `${category}|${subcat}|${value}`;
+                    const nodeId = itemToNodeId.get(itemKey);
+                    if (nodeId) {
+                        correctNewIds.add(nodeId);
+                        console.log('[ProfileVisualizer] NEW ITEM DETECTED:', nodeId, value);
+                    }
+                }
+            });
+        });
+
+        // Filter out empty categories (only show categories with data)
+        const categoryKeys = Object.keys(hierarchy).filter(cat => {
+            const subcats = hierarchy[cat];
+            // Check if category has any subcategories with values
+            return Object.keys(subcats).length > 0 &&
+                   Object.values(subcats).some(values => values.length > 0);
+        });
+
+        console.log('[ProfileVisualizer] Categories with data:', categoryKeys);
 
         if (layoutMode === 'circular') {
             // === CIRCULAR LAYOUT ===
@@ -199,22 +196,33 @@ const ProfileVisualizer = ({ data, userName }) => {
                         const angle3 = angle2 + ((valIndex - (hierarchy[category][subcategory].length - 1) / 2) * 0.4);
                         const radius3 = 120;
 
-                        newNodes.push({
+                        const isNewItem = correctNewIds.has(valNodeId);
+                        if (isNewItem) {
+                            console.log('[ProfileVisualizer] Adding new-item class to:', valNodeId);
+                        }
+
+                        const nodeConfig = {
                             id: valNodeId,
                             position: { x: radius3 * Math.cos(angle3), y: radius3 * Math.sin(angle3) },
                             data: { label: value },
                             parentNode: subcatNodeId,
                             hidden: collapsedNodes.has(categoryNodeId) || collapsedNodes.has(subcatNodeId),
-                            className: currentNewItemIdsRef.current.has(valNodeId) ? 'new-item' : '',
-                            style: {
+                            className: isNewItem ? 'new-item' : '',
+                            draggable: true
+                        };
+
+                        // new-itemでない場合のみstyleを設定（CSSを優先）
+                        if (!isNewItem) {
+                            nodeConfig.style = {
                                 background: '#ffffff',
                                 border: '1px solid #e0e7ff',
                                 borderRadius: '20px',
                                 padding: '8px 12px',
                                 fontSize: '13px'
-                            },
-                            draggable: true
-                        });
+                            };
+                        }
+
+                        newNodes.push(nodeConfig);
 
                         newEdges.push({
                             id: `edge-${subcategory}-${valIndex}`,
@@ -282,17 +290,19 @@ const ProfileVisualizer = ({ data, userName }) => {
                 });
 
                 const subcatKeys = Object.keys(hierarchy[category]);
-                const subcatSpacing = 200;
-                const subcatStartOffset = - ((subcatKeys.length - 1) * subcatSpacing) / 2;
+
+                // サブカテゴリーを水平に配置 / Arrange subcategories horizontally
+                const subcatSpacingX = 200;  // 水平間隔（文字が読める間隔） / Horizontal spacing (readable distance)
+                const subcatStartOffsetX = -((subcatKeys.length - 1) * subcatSpacingX) / 2;  // 中央揃え / Center align
+                const subcatOffsetY = 150;  // 親から下の固定距離 / Fixed distance below parent
 
                 subcatKeys.forEach((subcategory, subIndex) => {
                     const subcatNodeId = `subcat-${category}-${subcategory}`;
-                    const subcatOffsetX = subcatStartOffset + subIndex * subcatSpacing;
-                    const subcatOffsetY = 180;
+                    const subcatOffsetX = subcatStartOffsetX + subIndex * subcatSpacingX;  // 水平配置 / Horizontal layout
 
                     newNodes.push({
                         id: subcatNodeId,
-                        position: getExistingPosition(subcatNodeId, { x: subcatOffsetX, y: subcatOffsetY }),
+                        position: { x: subcatOffsetX, y: subcatOffsetY },
                         data: { label: subcategory },
                         parentNode: categoryNodeId,
                         hidden: collapsedNodes.has(categoryNodeId),
@@ -321,30 +331,43 @@ const ProfileVisualizer = ({ data, userName }) => {
                     });
 
                     const values = hierarchy[category][subcategory];
-                    const valSpacing = 120;
-                    const valStartOffset = - ((values.length - 1) * valSpacing) / 2;
+
+                    // 値を水平に配置 / Arrange values horizontally
+                    const valSpacingX = 150;  // 水平間隔（文字が読める間隔） / Horizontal spacing (readable distance)
+                    const valStartOffsetX = -((values.length - 1) * valSpacingX) / 2;  // 中央揃え / Center align
+                    const valOffsetY = 150;  // サブカテゴリーから下の固定距離 / Fixed distance below subcategory
 
                     values.forEach((value, valIndex) => {
                         const valNodeId = `val-${category}-${subcategory}-${valIndex}`;
-                        const valOffsetX = valStartOffset + valIndex * valSpacing;
-                        const valOffsetY = 180;
+                        const valOffsetX = valStartOffsetX + valIndex * valSpacingX;  // 水平配置 / Horizontal layout
 
-                        newNodes.push({
+                        const isNewItem = correctNewIds.has(valNodeId);
+                        if (isNewItem) {
+                            console.log('[ProfileVisualizer] Adding new-item class to:', valNodeId);
+                        }
+
+                        const nodeConfig = {
                             id: valNodeId,
-                            position: getExistingPosition(valNodeId, { x: valOffsetX, y: valOffsetY }),
+                            position: { x: valOffsetX, y: valOffsetY },
                             data: { label: value },
                             parentNode: subcatNodeId,
                             hidden: collapsedNodes.has(categoryNodeId) || collapsedNodes.has(subcatNodeId),
-                            className: currentNewItemIdsRef.current.has(valNodeId) ? 'new-item' : '',
-                            style: {
+                            className: isNewItem ? 'new-item' : '',
+                            draggable: true
+                        };
+
+                        // new-itemでない場合のみstyleを設定（CSSを優先）
+                        if (!isNewItem) {
+                            nodeConfig.style = {
                                 background: '#ffffff',
                                 border: '1px solid #e0e7ff',
                                 borderRadius: '20px',
                                 padding: '8px 12px',
                                 fontSize: '13px'
-                            },
-                            draggable: true
-                        });
+                            };
+                        }
+
+                        newNodes.push(nodeConfig);
 
                         newEdges.push({
                             id: `edge-${subcategory}-${valIndex}`,
@@ -357,59 +380,34 @@ const ProfileVisualizer = ({ data, userName }) => {
             });
         }
 
+        // Update previous data reference AFTER creating nodes
+        previousDataRef.current = JSON.parse(JSON.stringify(data));
+
+        // Set new item IDs immediately (before rendering)
+        if (correctNewIds.size > 0) {
+            console.log('[ProfileVisualizer] Setting new items for highlight:', Array.from(correctNewIds));
+            setNewItemIds(correctNewIds);
+
+            // Clear highlight after 2.5 seconds
+            setTimeout(() => {
+                console.log('[ProfileVisualizer] Clearing highlight');
+                setNewItemIds(new Set());
+            }, 2500);
+        }
+
+        // Update nodes and edges
         setNodes(newNodes);
         setEdges(newEdges);
 
-        // Fit view
-        if (rfInstance) {
+        // Fit view only when there are NO new items (to avoid interfering with highlight animation)
+        if (rfInstance && correctNewIds.size === 0) {
             setTimeout(() => {
-                if (currentNewItemIdsRef.current.size > 0) {
-                    const newIds = Array.from(currentNewItemIdsRef.current);
-                    const nodesToFocus = newNodes.filter(n => newIds.includes(n.id));
-
-                    if (nodesToFocus.length > 0) {
-                        const parentId = nodesToFocus[0].parentNode;
-                        const parentNode = newNodes.find(n => n.id === parentId);
-
-                        if (parentNode) {
-                            rfInstance.fitView({
-                                nodes: [{ id: parentId }, ...nodesToFocus.map(n => ({ id: n.id }))],
-                                padding: 0.5,
-                                duration: 1000,
-                                maxZoom: 1.5,
-                                minZoom: 0.5
-                            });
-                        } else {
-                            rfInstance.fitView({
-                                nodes: nodesToFocus.map(n => ({ id: n.id })),
-                                padding: 0.5,
-                                duration: 1000
-                            });
-                        }
-                    } else {
-                        rfInstance.fitView({
-                            padding: layoutMode === 'waterfall' ? 0.15 : 0.2,
-                            duration: 800,
-                            maxZoom: layoutMode === 'waterfall' ? 0.8 : 1.2,
-                            minZoom: 0.3
-                        });
-                    }
-
-                    setTimeout(() => {
-                        setNewItemIds(new Set(currentNewItemIdsRef.current));
-                        setTimeout(() => {
-                            setNewItemIds(new Set());
-                        }, 2000);
-                    }, 1100);
-
-                } else {
-                    rfInstance.fitView({
-                        padding: layoutMode === 'waterfall' ? 0.15 : 0.2,
-                        duration: 800,
-                        maxZoom: layoutMode === 'waterfall' ? 0.8 : 1.2,
-                        minZoom: 0.3
-                    });
-                }
+                rfInstance.fitView({
+                    padding: layoutMode === 'waterfall' ? 0.15 : 0.2,
+                    duration: 0,
+                    maxZoom: layoutMode === 'waterfall' ? 0.8 : 1.2,
+                    minZoom: 0.3
+                });
             }, 100);
         }
     }, [data, layoutMode, userName, collapsedNodes, setNodes, setEdges, rfInstance]);
