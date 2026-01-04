@@ -15,6 +15,15 @@ from profile_manager import ProfileManager
 from interviewer import Interviewer
 from gamification import GamificationManager
 from config import CHARACTERS, BADGES, RANDOM_EVENTS
+from logger import get_logger
+
+# ロガー初期化
+log_system = get_logger('System')
+log_api = get_logger('API')
+log_data = get_logger('Data')
+log_async = get_logger('Async')
+log_correction = get_logger('Correction')
+log_undo = get_logger('Undo')
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -40,6 +49,16 @@ def health_check():
         'status': 'ok',
         'lm_studio': 'connected' if lm_studio_connected else 'disconnected',
         'model': LM_STUDIO_MODEL
+    })
+
+
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    """バージョン情報を取得"""
+    return jsonify({
+        'backend_version': '5.0',
+        'data_structure_version': '5.0',
+        'description': '5階層データ構造対応'
     })
 
 
@@ -174,12 +193,12 @@ def chat():
     is_deletion_request = interviewer.detect_deletion_request(user_message)
 
     if is_deletion_request:
-        print(f"[Deletion] User is requesting to delete previous response - auto-undoing last turn")
+        log_correction.info("User requested deletion - auto-undoing last turn")
         # 前のターンを自動的に取り消す
         undo_result = profile_manager.undo_last_turn(session_id)
 
         if undo_result['success']:
-            print(f"[Deletion] Auto-undo successful, removed {undo_result['removed_data_count']} data points")
+            log_correction.info(f"Auto-undo successful, removed {undo_result['removed_data_count']} data points")
 
             # 更新されたプロファイルを取得
             profile = profile_manager.get_user(user_id)
@@ -205,13 +224,13 @@ def chat():
     is_correction = interviewer.detect_correction(user_message, session['conversation'])
 
     if is_correction:
-        print(f"[Correction] User is correcting previous response - auto-undoing last turn")
+        log_correction.info("User is correcting previous response - auto-undoing last turn")
         # 前のターンを自動的に取り消す
         undo_result = profile_manager.undo_last_turn(session_id)
         if undo_result['success']:
-            print(f"[Correction] Auto-undo successful, removed {undo_result['removed_data_count']} data points")
+            log_correction.info(f"Auto-undo successful, removed {undo_result['removed_data_count']} data points")
         else:
-            print(f"[Correction] Auto-undo failed: {undo_result['message']}")
+            log_correction.warning(f"Auto-undo failed: {undo_result['message']}")
 
     # ユーザーメッセージを保存
     profile_manager.add_message(session_id, 'user', user_message)
@@ -246,17 +265,15 @@ def chat():
 
         # 最初のメッセージがassistantの場合はスキップ（LM Studioは user から始まる必要がある）
         if i == 0 and role == 'assistant':
-            print(f"[DEBUG] Skipping first assistant message for LM Studio compatibility")
+            log_api.debug("Skipping first assistant message for LM Studio compatibility")
             greeting_already_sent = True
             continue
 
         messages.append({'role': role, 'content': content})
 
     # LM Studioからレスポンス取得
-    print(f"[DEBUG] Calling get_response with {len(messages)} messages, character: {profile['character']}")
-    print(f"[DEBUG] Category counts: {category_counts}")
-    print(f"[DEBUG] Empty categories: {empty_categories}")
-    print(f"[DEBUG] Greeting already sent: {greeting_already_sent}")
+    log_api.debug(f"Calling get_response with {len(messages)} messages, character: {profile['character']}")
+    log_api.debug(f"Category counts: {category_counts}, Empty categories: {empty_categories}")
 
     try:
         assistant_response = interviewer.get_response(
@@ -268,18 +285,16 @@ def chat():
             greeting_already_sent=greeting_already_sent,
             session_data=session
         )
-        print(f"[DEBUG] get_response returned: {assistant_response if assistant_response else 'EMPTY/NONE'}")
+        log_api.debug(f"get_response returned: {'OK' if assistant_response else 'EMPTY/NONE'}")
     except Exception as e:
-        print(f"[ERROR] get_response failed with exception: {e}")
-        import traceback
-        traceback.print_exc()
+        log_api.error(f"get_response failed with exception: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'LM Studioとの接続でエラーが発生しました。LM Studioが起動しているか確認してください。'
         }), 503
 
     if not assistant_response:
-        print("[ERROR] No response from LM Studio")
+        log_api.error("No response from LM Studio")
         # LM Studio接続確認
         if not interviewer.check_lm_studio_connection():
             return jsonify({
@@ -296,9 +311,10 @@ def chat():
     profile_manager.add_message(session_id, 'assistant', assistant_response, expression)
 
     # バッジチェック（軽量処理なので同期的に実行）
-    newly_earned_badges = gamification.check_badges(profile, message_analysis)
-    for badge_name in newly_earned_badges:
-        profile_manager.add_badge(user_id, badge_name)
+    # 🔧 DEBUG: 一時的に無効化してデータ抽出をテスト
+    newly_earned_badges = []  # gamification.check_badges(profile, message_analysis)
+    # for badge_name in newly_earned_badges:
+    #     profile_manager.add_badge(user_id, badge_name)
 
     # 更新されたプロファイルを取得
     profile = profile_manager.get_user(user_id)
@@ -317,29 +333,40 @@ def chat():
                 updated_session['conversation']
             )
 
-            # 抽出したデータを保存
+            # 抽出したデータを保存（5階層対応）
             for data_point in extracted_data:
                 try:
+                    # subcategory1とsubcategory2を取得
+                    subcategory1 = data_point.get('subcategory1')
+                    subcategory2 = data_point.get('subcategory2')
                     profile_manager.add_extracted_data(
                         session_id,
                         data_point['category'],
                         data_point['key'],
-                        data_point['value']
+                        data_point['value'],
+                        subcategory1=subcategory1,
+                        subcategory2=subcategory2
                     )
-                    print(f"[Data] Saved: {data_point['category']} - {data_point['key']}: {data_point['value']}")
+                    # パス表示用
+                    path_parts = [data_point['category']]
+                    if subcategory1:
+                        path_parts.append(subcategory1)
+                    if subcategory2:
+                        path_parts.append(subcategory2)
+                    path_parts.append(data_point['key'])
+                    path_str = " > ".join(path_parts)
+                    log_data.info(f"Saved: {path_str} = {data_point['value']}")
                 except Exception as e:
-                    print(f"[Data] Error saving data point: {e}")
+                    log_data.error(f"Error saving data point: {e}")
 
-            print(f"[Async] Data extraction completed for session {session_id}")
+            log_async.info(f"Data extraction completed for session {session_id}")
         except Exception as e:
-            print(f"[Async] Error in background data extraction: {e}")
-            import traceback
-            traceback.print_exc()
+            log_async.error(f"Error in background data extraction: {e}", exc_info=True)
 
     # バックグラウンドスレッドでデータ抽出を開始
     extraction_thread = threading.Thread(target=extract_data_async, daemon=True)
     extraction_thread.start()
-    print(f"[Async] Started background data extraction for session {session_id}")
+    log_async.debug(f"Started background data extraction for session {session_id}")
 
     # すぐにレスポンスを返す（データ抽出の完了を待たない）
     return jsonify({
@@ -393,27 +420,25 @@ def undo_last_turn():
         })
 
     except Exception as e:
-        print(f"[ERROR] Undo failed: {e}")
-        import traceback
-        traceback.print_exc()
+        log_undo.error(f"Undo failed: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("Interview System Backend Starting...")
-    print("=" * 50)
-    print("LM Studio URL:", interviewer.lm_studio_url)
-    print("Checking LM Studio connection...")
+    log_system.info("=" * 50)
+    log_system.info("Interview System Backend Starting...")
+    log_system.info("=" * 50)
+    log_system.info(f"LM Studio URL: {interviewer.lm_studio_url}")
+    log_system.info("Checking LM Studio connection...")
 
     if interviewer.check_lm_studio_connection():
-        print("✓ LM Studio is connected!")
+        log_system.info("✓ LM Studio is connected!")
     else:
-        print("✗ LM Studio is NOT connected!")
-        print("Please start LM Studio at http://localhost:1234")
+        log_system.warning("✗ LM Studio is NOT connected!")
+        log_system.warning("Please start LM Studio at http://localhost:1234")
 
-    print("=" * 50)
-    print("Server starting at http://localhost:5001")
-    print("=" * 50)
+    log_system.info("=" * 50)
+    log_system.info("Server starting at http://localhost:5001")
+    log_system.info("=" * 50)
 
     app.run(debug=True, host='0.0.0.0', port=5001)

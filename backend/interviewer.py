@@ -10,6 +10,13 @@ from config import (
     LM_STUDIO_URL, LM_STUDIO_MODEL, CHARACTERS, CATEGORIES
 )
 from key_normalizer import KeyNormalizer
+from logger import get_logger
+
+# ロガー初期化
+log_lm = get_logger('LMStudio')
+log_extract = get_logger('Extraction')
+log_correction = get_logger('Correction')
+log_debug = get_logger('Debug')
 
 
 class Interviewer:
@@ -33,7 +40,7 @@ class Interviewer:
             )
             return response.status_code == 200
         except Exception as e:
-            print(f"LM Studio connection error: {e}")
+            log_lm.debug(f"LM Studio connection error: {e}")
             return False
 
     def _detect_current_category(self, session_data: Dict) -> Optional[str]:
@@ -73,7 +80,7 @@ class Interviewer:
         for category, keywords in category_keywords.items():
             for keyword in keywords:
                 if keyword in last_assistant_msg:
-                    print(f"[Category Detection] Current topic: {category} (keyword: {keyword})")
+                    log_debug.debug(f"Current topic: {category} (keyword: {keyword})")
                     return category
 
         return None
@@ -119,7 +126,7 @@ class Interviewer:
             for item in basic_profile:
                 if item.get('key') == '名前' and item.get('value'):
                     user_name = item['value']
-                    print(f"[DEBUG] Found user name in session data: {user_name}")
+                    log_debug.debug(f"Found user name in session data: {user_name}")
                     break
 
         # 名前がまだない場合、直前の会話から推測
@@ -137,7 +144,7 @@ class Interviewer:
                         user_response = last_user.get('content', '').strip()
                         if len(user_response) <= 20 and user_response:
                             user_name = user_response
-                            print(f"[DEBUG] Inferred user name from conversation: {user_name}")
+                            log_debug.debug(f"Inferred user name from conversation: {user_name}")
 
 
         # 会話履歴から同じトピックの連続質問数をカウント
@@ -231,7 +238,7 @@ class Interviewer:
 以下の情報は既に収集済みです。同じことを再度聞かないでください。
 既知の情報に基づいて、自然に掘り下げたり、関連する質問をしてください。
 {''.join(details_lines)}"""
-                print(f"[DEBUG] Extracted data added to system prompt: {len(details_lines)} items")
+                log_debug.debug(f"Extracted data added to system prompt: {len(details_lines)} items")
 
         system_prompt = f"""あなたは{character['name']}、{character['description']}です。
 
@@ -323,39 +330,37 @@ class Interviewer:
                 assistant_message = result["choices"][0]["message"]["content"]
 
                 # デバッグ: 元のメッセージを出力
-                print(f"[DEBUG] LM Studio raw response: {assistant_message[:200]}")
+                log_lm.debug(f"LM Studio raw response: {assistant_message[:100]}...")
 
                 # 内部コメントを除去
                 cleaned_message = self._clean_response(assistant_message)
 
                 # デバッグ: クリーン後のメッセージを出力
-                print(f"[DEBUG] Cleaned response: {cleaned_message[:200]}")
-                print(f"[DEBUG] Response length - raw: {len(assistant_message)}, cleaned: {len(cleaned_message)}")
+                log_lm.debug(f"Response length - raw: {len(assistant_message)}, cleaned: {len(cleaned_message)}")
 
                 # 空の応答をチェック
                 final_message = cleaned_message.strip()
                 if not final_message:
-                    print(f"[WARNING] Cleaned message is empty! Raw response was: {assistant_message[:500]}")
+                    log_lm.warning(f"Cleaned message is empty! Raw response was: {assistant_message[:500]}")
                     return None
 
                 return final_message
             else:
-                print(f"[ERROR] LM Studio error: {response.status_code}")
+                log_lm.error(f"LM Studio error: {response.status_code}")
                 try:
                     error_detail = response.json()
-                    print(f"[ERROR] LM Studio error detail: {error_detail}")
+                    log_lm.error(f"LM Studio error detail: {error_detail}")
                 except:
-                    print(f"[ERROR] LM Studio error body: {response.text[:500]}")
+                    log_lm.error(f"LM Studio error body: {response.text[:500]}")
 
                 # システムプロンプトの長さをチェック
-                print(f"[DEBUG] System prompt length: {len(system_prompt)} characters")
-                print(f"[DEBUG] Total messages: {len(full_messages)}")
-                print(f"[DEBUG] System prompt preview: {system_prompt[:300]}...")
+                log_debug.debug(f"System prompt length: {len(system_prompt)} characters")
+                log_debug.debug(f"Total messages: {len(full_messages)}")
 
                 return None
 
         except Exception as e:
-            print(f"Error getting response: {e}")
+            log_lm.error(f"Error getting response: {e}")
             return None
 
     def _count_consecutive_questions(self, session_data: Dict) -> int:
@@ -393,7 +398,7 @@ class Interviewer:
             else:
                 break
 
-        print(f"[ConversationFlow] Latest category: {latest_category}, Consecutive: {consecutive_count}")
+        log_debug.debug(f"Latest category: {latest_category}, Consecutive: {consecutive_count}")
         return consecutive_count
 
     def _clean_response(self, text: str) -> str:
@@ -507,33 +512,41 @@ class Interviewer:
                 )
 
                 # 直前のアシスタント質問を取得
-                # conversation_history[-1] = 今追加されたアシスタント応答
-                # conversation_history[-2] = ユーザーメッセージ
-                # conversation_history[-3] = 前のアシスタント質問
+                # パターン1: conversation_history[-1] = 今追加されたアシスタント応答, [-2] = ユーザー, [-3] = 前の質問
+                # パターン2: conversation_history[-1] = ユーザーメッセージ, [-2] = 前の質問（まだアシスタント応答が追加されていない）
                 previous_question = ""
-                if len(conversation_history) >= 3:
+
+                # デバッグ: 会話履歴を確認
+                log_extract.debug(f"Conversation history length: {len(conversation_history)}")
+
+                # 最後のメッセージがuserの場合（アシスタント応答がまだ追加されていない）
+                if len(conversation_history) >= 2 and conversation_history[-1].get('role') == 'user':
+                    # [-2] が前のアシスタント質問
+                    prev_msg = conversation_history[-2]
+                    if prev_msg.get('role') == 'assistant':
+                        previous_question = prev_msg.get('content', '')
+                # 最後のメッセージがassistantの場合（アシスタント応答が既に追加されている）
+                elif len(conversation_history) >= 3 and conversation_history[-1].get('role') == 'assistant':
+                    # [-3] が前のアシスタント質問
                     prev_msg = conversation_history[-3]
                     if prev_msg.get('role') == 'assistant':
                         previous_question = prev_msg.get('content', '')
 
-                # デバッグ: 会話履歴を確認
-                print(f"[Extraction] Conversation history length: {len(conversation_history)}")
-                if len(conversation_history) >= 3:
-                    print(f"[Extraction] Last 3 messages:")
-                    print(f"  [-3] {conversation_history[-3].get('role')}: {conversation_history[-3].get('content', '')[:80]}")
-                    print(f"  [-2] {conversation_history[-2].get('role')}: {conversation_history[-2].get('content', '')[:80]}")
-                    print(f"  [-1] {conversation_history[-1].get('role')}: {conversation_history[-1].get('content', '')[:80]}")
-
                 # LLMに送るユーザーメッセージを構築（最小限）
                 if previous_question:
-                    print(f"[Extraction] Previous question detected: {previous_question[:100]}")
-                    llm_user_message = f"""Q:{previous_question}
+                    # 質問文から挨拶部分を除去（改行で分割して最後の行のみ使用）
+                    # 例: "初めまして。青山です。\nお名前を教えてもらえますか？" → "お名前を教えてもらえますか？"
+                    question_lines = previous_question.strip().split('\n')
+                    clean_question = question_lines[-1].strip()  # 最後の行のみ
+
+                    log_extract.debug(f"Previous question detected: {previous_question[:100]}")
+                    llm_user_message = f"""Q:{clean_question}
 A:{user_message}"""
                 else:
-                    print(f"[Extraction] No previous question detected")
+                    log_extract.debug(f" No previous question detected")
                     llm_user_message = user_message
 
-                print(f"[Extraction] LLM user message: {llm_user_message[:200]}")
+                log_extract.debug(f" LLM user message: {llm_user_message[:200]}")
 
                 # LM Studioにリクエスト
                 response = requests.post(
@@ -544,8 +557,8 @@ A:{user_message}"""
                             {"role": "system", "content": extraction_prompt},
                             {"role": "user", "content": llm_user_message}
                         ],
-                        "max_tokens": 200,  # 短くしてJSON配列のみを返すように
-                        "temperature": 0.1,  # さらに低くして正確性を重視
+                        "max_tokens": 500,  # 増やして完全なJSONを返すように
+                        "temperature": 0.0,  # 0にして完全に決定論的に
                         "stream": False
                     },
                     timeout=30
@@ -556,22 +569,22 @@ A:{user_message}"""
                     extracted_text = result["choices"][0]["message"]["content"]
 
                     # デバッグ: 生のレスポンスを出力
-                    print(f"[Extraction] LM Studio response: {extracted_text}")
+                    log_extract.debug(f" LM Studio response: {extracted_text}")
 
                     # JSON形式でパース
                     extracted_data = self._parse_extracted_data(extracted_text)
-                    print(f"[Extraction] Found {len(extracted_data)} data points")
+                    log_extract.debug(f" Found {len(extracted_data)} data points")
 
                     # 複数項目を自動分割
                     extracted_data = self._split_multiple_items(extracted_data)
-                    print(f"[Extraction] After splitting: {len(extracted_data)} data points")
+                    log_extract.debug(f" After splitting: {len(extracted_data)} data points")
 
                     # 質問文からの誤抽出をチェック
                     if previous_question:
                         extracted_data = self._filter_question_contamination(
                             extracted_data, user_message, previous_question
                         )
-                        print(f"[Extraction] After filtering: {len(extracted_data)} data points")
+                        log_extract.debug(f" After filtering: {len(extracted_data)} data points")
 
                     # キー正規化を適用 / Apply key normalization
                     normalizer = KeyNormalizer()
@@ -580,14 +593,14 @@ A:{user_message}"""
                     # 正規化統計をログ出力
                     stats = normalizer.get_normalization_stats()
                     if stats["total_normalizations"] > 0:
-                        print(f"[Normalization] Normalized {stats['total_normalizations']} keys")
+                        log_extract.debug(f"Normalized {stats['total_normalizations']} keys")
                         for category, data in stats['by_category'].items():
                             for raw, normalized in data['mappings'].items():
-                                print(f"[Normalization]   {category}/{raw} → {normalized}")
+                                log_extract.debug(f"  {category}/{raw} → {normalized}")
 
                     # デバッグ: 抽出されたデータを出力
                     for data in normalized_data:
-                        print(f"[Extraction] Data: {data}")
+                        log_extract.debug(f" Data: {data}")
 
                     # データが抽出できた、または最後の試行の場合は結果を返す
                     if normalized_data:
@@ -595,29 +608,29 @@ A:{user_message}"""
 
                     # 最後の試行の場合は空のリストを返す
                     if attempt == max_retries - 1:
-                        print(f"[Extraction] All retries exhausted, returning empty list")
+                        log_extract.debug(f" All retries exhausted, returning empty list")
                         return []
 
                     # データが空で、まだリトライ可能な場合
-                    print(f"[Extraction] No data extracted (possibly filtered out), retry {attempt + 1}/{max_retries}")
+                    log_extract.debug(f" No data extracted (possibly filtered out), retry {attempt + 1}/{max_retries}")
                     continue
                 else:
-                    print(f"[Extraction] LM Studio error: {response.status_code}")
+                    log_extract.debug(f" LM Studio error: {response.status_code}")
                     if attempt < max_retries - 1:
-                        print(f"[Extraction] Retrying... ({attempt + 1}/{max_retries})")
+                        log_extract.debug(f" Retrying... ({attempt + 1}/{max_retries})")
                         continue
                     return []
 
             except requests.exceptions.Timeout:
-                print(f"[Extraction] Timeout on attempt {attempt + 1}/{max_retries}")
+                log_extract.debug(f" Timeout on attempt {attempt + 1}/{max_retries}")
                 if attempt < max_retries - 1:
-                    print(f"[Extraction] Retrying...")
+                    log_extract.debug(f" Retrying...")
                     continue
                 return []
             except Exception as e:
-                print(f"[Extraction] Error: {e}")
+                log_extract.debug(f" Error: {e}")
                 if attempt < max_retries - 1:
-                    print(f"[Extraction] Retrying... ({attempt + 1}/{max_retries})")
+                    log_extract.debug(f" Retrying... ({attempt + 1}/{max_retries})")
                     continue
                 return []
 
@@ -643,71 +656,132 @@ A:{user_message}"""
         ])
 
         # 直前のアシスタントメッセージ（質問）を抽出して分析
-        # conversation_history[-1] = 今追加されたアシスタント応答
-        # conversation_history[-2] = ユーザーメッセージ
-        # conversation_history[-3] = 前のアシスタント質問
+        # extract_profile_data() と同じロジックを使用
         previous_assistant_question = ""
         question_analysis = ""
-        if len(conversation_history) >= 3:
+
+        # 最後のメッセージがuserの場合（アシスタント応答がまだ追加されていない）
+        if len(conversation_history) >= 2 and conversation_history[-1].get('role') == 'user':
+            # [-2] が前のアシスタント質問
+            prev_msg = conversation_history[-2]
+            if prev_msg.get('role') == 'assistant':
+                previous_assistant_question = prev_msg.get('content', '')
+        # 最後のメッセージがassistantの場合（アシスタント応答が既に追加されている）
+        elif len(conversation_history) >= 3 and conversation_history[-1].get('role') == 'assistant':
+            # [-3] が前のアシスタント質問
             prev_msg = conversation_history[-3]
             if prev_msg.get('role') == 'assistant':
                 previous_assistant_question = prev_msg.get('content', '')
 
-                # 質問内容の分析（優先度順）
-                question_lower = previous_assistant_question.lower()
+        # 質問が取得できた場合のみ分析
+        if previous_assistant_question:
+            # 質問内容の分析（優先度順）
+            question_lower = previous_assistant_question.lower()
 
-                # 名前
-                if '名前' in question_lower or 'なまえ' in question_lower or 'お名前' in question_lower:
-                    question_analysis = "【重要】直前の質問は「名前」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「名前」として抽出してください。"
+            # 名前
+            if '名前' in question_lower or 'なまえ' in question_lower or 'お名前' in question_lower:
+                question_analysis = "【重要】直前の質問は「名前」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「名前」として抽出してください。"
 
-                # 年齢
-                elif '年齢' in question_lower or 'とし' in question_lower or '何歳' in question_lower or 'いくつ' in question_lower or '歳' in question_lower:
-                    question_analysis = "【重要】直前の質問は「年齢」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「年齢」として抽出してください。"
+            # 年齢
+            elif '年齢' in question_lower or 'とし' in question_lower or '何歳' in question_lower or 'いくつ' in question_lower or '歳' in question_lower:
+                question_analysis = "【重要】直前の質問は「年齢」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「年齢」として抽出してください。"
 
-                # 職業・仕事
-                elif '仕事' in question_lower or '職業' in question_lower or 'しごと' in question_lower or '働' in question_lower or 'お仕事' in question_lower:
-                    question_analysis = "【重要】直前の質問は「職業」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「職業」として抽出してください。"
+            # 業務内容・仕事の詳細
+            elif '業務' in question_lower or '担当' in question_lower or '何をして' in question_lower or '何やって' in question_lower or 'どんなこと' in question_lower:
+                question_analysis = "【重要】直前の質問は「業務内容」について聞いています。ユーザーの回答は「現在の生活」カテゴリーの「仕事 > 業務内容」として抽出してください。職業名ではなく、具体的な業務内容です。"
 
-                # 住所・居住地
-                elif '住' in question_lower or '住所' in question_lower or 'どこ' in question_lower or '居' in question_lower or 'どちら' in question_lower:
-                    question_analysis = "【重要】直前の質問は「住所」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「住所」として抽出してください。"
+            # 職業・仕事（職業名）
+            elif '仕事' in question_lower or '職業' in question_lower or 'しごと' in question_lower or '働' in question_lower or 'お仕事' in question_lower:
+                question_analysis = "【重要】直前の質問は「職業」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「職業」として抽出してください。"
 
-                # 趣味
-                elif '趣味' in question_lower or 'しゅみ' in question_lower:
-                    question_analysis = "【重要】直前の質問は「趣味」について聞いています。ユーザーの回答は「趣味・興味・娯楽」カテゴリーの「趣味」として抽出してください。"
+            # 住所・居住地
+            elif '住' in question_lower or '住所' in question_lower or 'どこ' in question_lower or '居' in question_lower or 'どちら' in question_lower:
+                question_analysis = "【重要】直前の質問は「住所」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「住所」として抽出してください。"
 
-                # 好きなこと・もの
-                elif '好き' in question_lower or 'すき' in question_lower:
-                    question_analysis = "【重要】直前の質問は好みについて聞いています。「趣味・興味・娯楽」または「健康・ライフスタイル」カテゴリーで適切に抽出してください。"
+            # 趣味
+            elif '趣味' in question_lower or 'しゅみ' in question_lower:
+                question_analysis = "【重要】直前の質問は「趣味」について聞いています。ユーザーの回答は「趣味・興味・娯楽」カテゴリーの「趣味」として抽出してください。"
 
-                # 運動・健康
-                elif '運動' in question_lower or 'スポーツ' in question_lower or '健康' in question_lower:
-                    question_analysis = "【重要】直前の質問は「運動」や「健康」について聞いています。ユーザーの回答は「健康・ライフスタイル」カテゴリーとして抽出してください。"
+            # 好きなこと・もの
+            elif '好き' in question_lower or 'すき' in question_lower:
+                question_analysis = "【重要】直前の質問は好みについて聞いています。「趣味・興味・娯楽」または「健康・ライフスタイル」カテゴリーで適切に抽出してください。"
 
-                # 学習・勉強
-                elif '学' in question_lower or '勉強' in question_lower or '学習' in question_lower:
-                    question_analysis = "【重要】直前の質問は学習について聞いています。ユーザーの回答は「学習・成長」カテゴリーとして抽出してください。"
+            # 運動・健康
+            elif '運動' in question_lower or 'スポーツ' in question_lower or '健康' in question_lower:
+                question_analysis = "【重要】直前の質問は「運動」や「健康」について聞いています。ユーザーの回答は「健康・ライフスタイル」カテゴリーとして抽出してください。"
 
-                # 家族
-                elif '家族' in question_lower or 'かぞく' in question_lower:
-                    question_analysis = "【重要】直前の質問は「家族」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「家族構成」または「人間関係・コミュニティ」カテゴリーとして抽出してください。"
+            # 学習・勉強
+            elif '学' in question_lower or '勉強' in question_lower or '学習' in question_lower:
+                question_analysis = "【重要】直前の質問は学習について聞いています。ユーザーの回答は「学習・成長」カテゴリーとして抽出してください。"
 
-                if question_analysis:
-                    print(f"[Extraction] Question detected: {previous_assistant_question[:50]}")
-                    print(f"[Extraction] Analysis: {question_analysis}")
+            # 家族
+            elif '家族' in question_lower or 'かぞく' in question_lower:
+                question_analysis = "【重要】直前の質問は「家族」について聞いています。ユーザーの回答は「基本プロフィール」カテゴリーの「家族構成」または「人間関係・コミュニティ」カテゴリーとして抽出してください。"
 
-        # 標準キー名のリスト
-        standard_keys_desc = """
-基本プロフィール: 名前, 年齢, 性別, 職業, 住所, 家族構成, 住居状況
-ライフストーリー: 学歴, 職歴, 人生の転機, 出身地, 習慣, 活動, 経験
-現在の生活: 住居, 生活リズム, 食事, 睡眠, 通勤
-健康・ライフスタイル: 運動習慣, 食事好み, 健康状態, 医療
-趣味・興味・娯楽: 趣味, 音楽, 食べ物, 旅行, 活動
-学習・成長: 学習内容, 分野, 活動, 目標, スキル
-人間関係・コミュニティ: 友人, 家族関係, 所属, 活動
-情報収集・メディア: 情報源, SNS, プラットフォーム, 関心事
-経済・消費: 年収, 財政状況, 投資, 消費
-価値観・将来: 価値観, 夢, 人生観, 理想"""
+            if question_analysis:
+                log_extract.debug(f" Question detected: {previous_assistant_question[:50]}")
+                log_extract.debug(f" Analysis: {question_analysis}")
+
+        # 5階層データ構造の説明と例
+        hierarchy_explanation = """
+【5階層データ構造】
+category（固定カテゴリー） > subcategory1（サブカテゴリー1） > subcategory2（サブカテゴリー2） > key（キー） > value（値）
+
+⚠️ 階層の一貫性ルール（重要！）:
+同じトピック（例：ゲーム、スポーツ、読書など）の情報は、必ず同じ階層構造で整理してください。
+subcategory1として「趣味」「興味」などの抽象的な名前は避け、具体的なトピック名を使用してください。
+
+✅ 良い例（一貫した階層）:
+- カテゴリー: 趣味・興味・娯楽
+  - サブカテゴリー1: ゲーム
+    - サブカテゴリー2: ロールプレイングゲーム
+      - キー: 好きなタイトル → 値: ファイナルファンタジー
+    - サブカテゴリー2: アクションゲーム
+      - キー: 好きなタイトル → 値: スーパーマリオ
+    - サブカテゴリー2: パズルゲーム
+      - キー: 好きなタイトル → 値: テトリス
+
+❌ 悪い例（一貫性のない階層）:
+- カテゴリー: 趣味・興味・娯楽
+  - サブカテゴリー1: 趣味          ← 抽象的すぎる！
+    - サブカテゴリー2: ゲーム
+      - キー: 種類 → 値: ビデオゲーム
+  - サブカテゴリー1: ゲーム        ← 上と重複！
+    - サブカテゴリー2: ロールプレイングゲーム
+      - キー: 好きなタイトル → 値: ファイナルファンタジー
+
+✅ その他の良い例:
+- カテゴリー: 趣味・興味・娯楽
+  - サブカテゴリー1: スポーツ
+    - サブカテゴリー2: サッカー
+      - キー: 好きなチーム → 値: マンチェスター・ユナイテッド
+      - キー: 好きな選手 → 値: クリスティアーノ・ロナウド
+    - サブカテゴリー2: 格闘技
+      - キー: 種類 → 値: ムエタイ
+      - キー: 経験年数 → 値: 3年
+  - サブカテゴリー1: 乗り物
+    - サブカテゴリー2: バイク
+      - キー: 車種 → 値: ハーレーダビッドソン
+      - キー: 排気量 → 値: 1200cc
+
+- カテゴリー: 現在の生活
+  - サブカテゴリー1: 仕事
+    - サブカテゴリー2: 業務内容
+      - キー: 担当業務 → 値: AIプロダクト開発
+      - キー: 使用言語 → 値: Python
+      - キー: 業務 → 値: トイレの掃除（具体的な業務なので抽出すべき）
+      - キー: 業務 → 値: データ入力（具体的な業務なので抽出すべき）
+    - サブカテゴリー2: 勤務先
+      - キー: 企業タイプ → 値: スタートアップ
+      - キー: 従業員数 → 値: 50人
+
+⚠️ 階層統一の原則:
+1. subcategory1には具体的なトピック名（ゲーム、スポーツ、読書、料理など）を使用
+2. 「趣味」「興味」「活動」などの抽象的な名前をsubcategory1に使わない
+3. 同じトピックの情報は必ず同じsubcategory1配下に配置
+4. subcategory2で詳細なジャンルや分類を表現
+
+可能な限り5階層で詳細に抽出し、階層の一貫性を保ってください。"""
 
         # 質問コンテキストセクション（簡潔版 - 例を一切含まない）
         question_context_section = ""
@@ -728,7 +802,12 @@ A:{user_message}"""
 例: 仕事の話をしている流れで「AIプロダクトサービス」→「現在の生活」の「業務内容」として抽出（趣味ではない）
 """
 
-        prompt = f"""⚠️⚠️⚠️ 重要 ⚠️⚠️⚠️
+        prompt = f"""⚠️⚠️⚠️ 最重要指示 ⚠️⚠️⚠️
+出力: JSON配列のみを返してください。
+説明文、確認メッセージ、例は一切不要です。
+「了解しました」「指示に従い」などの返答は不要です。
+JSON配列 [] だけを出力してください。
+
 回答(A:)に書かれていない情報は絶対に抽出しないでください。
 質問文(Q:)の例や選択肢を抽出することは厳禁です。
 
@@ -736,8 +815,7 @@ A:{user_message}"""
 - 質問文の例・選択肢を抽出すること
 - 回答に含まれない情報の捏造
 - 曖昧・不十分な回答の無理な解釈
-
-✅ 出力: JSON配列のみ
+- 確認メッセージや説明文の出力
 
 {question_context_section}{category_context_section}
 
@@ -747,11 +825,13 @@ A:{user_message}"""
 - 継続的な活動・パターン
 - 中長期的な特徴（「最近ずっと〜」）
 - 基本情報（名前、年齢、職業、住所など）
-- 具体的で明確な回答のみ
+- 業務内容・仕事の詳細（「トイレの掃除」「データ入力」「接客」など）
+- 具体的で明確な回答（1単語以上の具体的な内容）
 
 ❌ 抽出してはいけない情報:
 - 質問文に含まれる例や選択肢（「甘いもの、しょっぱいもの」など）
-- 曖昧・不十分な回答（「うまいもの」「いろいろ」など）→ []
+- 本当に曖昧な回答（「うまいもの」「いろいろ」「よくわからない」など）
+  ⚠️ 注意：「トイレの掃除」「接客」などは具体的なので抽出すべき！
 - 一時的な気分・感情（「今日お疲れ」「今朝だるい」など）
 - その日限りの状態（「今日バタバタ」「今日は忙しい」など）
 - 短期的な変化（天気、今日の予定など）
@@ -761,32 +841,102 @@ A:{user_message}"""
 【カテゴリー】
 {categories_desc}
 
-【標準キー名】
-{standard_keys_desc}
+{hierarchy_explanation}
+
+【⚠️⚠️⚠️ カテゴリー分類の優先順位ルール ⚠️⚠️⚠️】
+同じ情報を複数のカテゴリーに重複して登録することは絶対に禁止です！
+以下の情報は必ず「基本プロフィール」カテゴリーに分類してください：
+
+必須：基本プロフィールに分類すべき情報
+- 名前、氏名、呼び名、ニックネーム → 基本プロフィール > 名前
+- 年齢、生年月日、誕生日、何歳 → 基本プロフィール > 年齢
+- 職業、仕事（職業名そのもの）→ 基本プロフィール > 職業
+  例：「エンジニア」「医者」「会社員」「学生」「八百屋」など
+- 住所、居住地、住んでいる場所、出身地 → 基本プロフィール > 住所
+- 性別 → 基本プロフィール > 性別
+- 家族構成、続柄（父、母、兄弟など）→ 基本プロフィール > 家族構成
+- 学歴、最終学歴、卒業した学校 → 基本プロフィール > 学歴
+
+⚠️ 重複禁止の例：
+❌ 間違い：
+  職業「エンジニア」を「基本プロフィール」と「現在の生活」の両方に登録
+❌ 間違い：
+  住所「横浜市」を「基本プロフィール」と「現在の生活」の両方に登録
+
+✅ 正しい分類：
+  - 職業名「エンジニア」→ 基本プロフィール > 職業 > 職業名 のみ
+  - 業務内容「AIプロダクト開発」→ 現在の生活 > 仕事 > 業務内容（職業名ではないので別）
+  - 住所「横浜市保土ヶ谷区」→ 基本プロフィール > 住所 > 地域 のみ
+
+✅ 職業関連の詳細情報の分類方法：
+  - 職業名そのもの（エンジニア、医者など）→ 基本プロフィール > 職業
+  - 業務内容、仕事の詳細、担当業務 → 現在の生活 > 仕事 > 業務内容
+  - 勤務先名、会社名、職場名 → 現在の生活 > 仕事 > 勤務先
+  - 勤務時間、働き方、勤務形態 → 現在の生活 > 仕事 > 勤務形態
+  - 職場環境、同僚との関係 → 人間関係・コミュニティ > 職場
 
 【ルール】
 1. ⚠️ 回答(A:)に明示的に書かれている情報のみ抽出
    - 質問文(Q:)の例・選択肢は絶対に抽出しない
    - 推測・解釈・補完は禁止
-2. ✅ 複数項目は必ず個別に分割（最重要！）
+2. ✅ 情報の詳細度に応じて適切な階層を選択
+   - 詳細な分類が可能な場合のみsubcategory1やsubcategory2を使用
+   - ⚠️ 重要：「その他」などの無意味なサブカテゴリーは作らない
+   - 適切なサブカテゴリー名がない場合は、その階層を省略する
+   - 例1（5階層）: 「サッカーが好きで、マンチェスター・ユナイテッドのファン」
+     → category: 趣味・興味・娯楽, subcategory1: スポーツ, subcategory2: サッカー, key: 好きなチーム, value: マンチェスター・ユナイテッド
+   - 例2（3階層）: 「名前は田中です」
+     → category: 基本プロフィール, subcategory1: 名前, key: 氏名, value: 田中
+     （subcategory2は不要なので省略）
+   - 例3（3階層）: 「趣味は読書です」
+     → category: 趣味・興味・娯楽, subcategory1: 読書, key: 趣味, value: 読書
+     （subcategory2は不要なので省略）
+3. ⚠️⚠️⚠️ 階層の一貫性を保つ（超重要！）
+   - 同じトピック（ゲーム、スポーツなど）は必ず同じsubcategory1を使用
+   - subcategory1には「趣味」「興味」などの抽象的な名前を使わない
+   - 具体的なトピック名（ゲーム、スポーツ、読書、料理など）をsubcategory1に使用
+   - 例: ゲーム関連は全て「subcategory1: ゲーム」配下に統一
+4. ✅ 複数項目は必ず個別に分割（最重要！）
    - 「AとB」→ "A"と"B"の2件（「AとB」という1件ではない）
    - 「AとBとC」→ "A"と"B"と"C"の3件
    - 「A、B」→ "A"と"B"の2件
    - 🚫 間違い：「AとB」という値を1つのデータとして出力
    - ✅ 正解：「と」「、」などのセパレーターを含まない、個別の値として出力
-3. 曖昧・不十分な回答は抽出しない（「うまいもの」「いろいろ」→[]）
-4. 不正な値は使わない（空配列"[]"、空文字、記号のみは禁止）
+   - ⚠️ 例外：名前（人名）は固有名詞として1つのまま保存
+     - 「イーロンマスク」→ 1件（分割しない）
+     - 「山田太郎」→ 1件（分割しない）
+     - 名前に「と」が含まれていても分割しない（例：「佐藤と鈴木」は2人の名前なら分割するが、「伊藤」は1人の姓）
+5. ⚠️⚠️⚠️ 同じ情報を複数のカテゴリーに重複登録することは絶対禁止！
+   - 1つの情報は1つのカテゴリーのみに分類
+   - 特に基本プロフィール情報（名前、年齢、職業、住所）は基本プロフィールのみ
+6. 曖昧・不十分な回答は抽出しない（「うまいもの」「いろいろ」→[]）
+7. 不正な値は使わない（空配列"[]"、空文字、記号のみは禁止）
 
 【出力形式】
 各項目は別々のJSONオブジェクトとして出力してください。
-[{{"category": "カテゴリー", "key": "項目", "value": "値"}}]
+
+5階層（推奨）:
+[{{"category": "カテゴリー", "subcategory1": "サブカテゴリー1", "subcategory2": "サブカテゴリー2", "key": "キー", "value": "値"}}]
+
+4階層:
+[{{"category": "カテゴリー", "subcategory1": "サブカテゴリー1", "subcategory2": "サブカテゴリー2", "value": "値"}}]
+
+3階層:
+[{{"category": "カテゴリー", "subcategory1": "サブカテゴリー1", "key": "キー", "value": "値"}}]
+
+2階層（詳細情報が少ない場合のみ）:
+[{{"category": "カテゴリー", "key": "キー", "value": "値"}}]
 
 情報なし→[]
 
 ⚠️ 最終確認：
 1. 回答(A:)に書かれている情報のみを抽出していますか？
-2. 複数の項目がある場合、個別に分割していますか？
-3. 「と」「、」などのセパレーターを含む値を出力していませんか？（含んでいたら分割し直してください）"""
+2. ⚠️ 「その他」などの無意味なサブカテゴリーを作っていませんか？（適切な名前がなければ省略）
+3. 情報の詳細度に応じて適切な階層数（2〜5階層）を選択していますか？
+4. ⚠️⚠️⚠️ 同じトピック（ゲーム、スポーツなど）は全て同じsubcategory1を使用していますか？
+5. subcategory1に「趣味」「興味」などの抽象的な名前を使っていませんか？（具体的なトピック名を使用）
+6. 複数の項目がある場合、個別に分割していますか？
+7. 「と」「、」などのセパレーターを含む値を出力していませんか？（含んでいたら分割し直してください）"""
 
         return prompt
 
@@ -796,7 +946,8 @@ A:{user_message}"""
         LLMが分割していない場合でも、バックエンドで確実に分割する
         """
         result = []
-        separators = ['、', '，', 'と', ',', '・', ' ']
+        # スペースを除外（固有名詞「イーロンマスク」「旧twitterX」などを保護）
+        separators = ['、', '，', 'と', ',', '・']
 
         for item in extracted_data:
             value = str(item.get('value', '')).strip()
@@ -805,12 +956,25 @@ A:{user_message}"""
             if not value:
                 continue
 
+            # 名前関連のフィールドは分割しない（固有名詞として扱う）
+            key = item.get('key', '').lower()
+            category = item.get('category', '')
+            is_name_field = (
+                key in ['名前', '氏名', 'name', 'なまえ'] or
+                (category == '基本プロフィール' and '名前' in key)
+            )
+
+            if is_name_field:
+                # 名前は分割せずそのまま追加
+                result.append(item)
+                continue
+
             # セパレーターを含むかチェック
             contains_separator = any(sep in value for sep in separators)
 
             if contains_separator:
                 # セパレーターで分割
-                print(f"[Extraction] Auto-splitting: '{value}'")
+                log_extract.debug(f" Auto-splitting: '{value}'")
                 parts = [value]
 
                 # 各セパレーターで分割
@@ -826,7 +990,7 @@ A:{user_message}"""
                         new_item = item.copy()
                         new_item['value'] = part
                         result.append(new_item)
-                        print(f"[Extraction]   → Split item: '{part}'")
+                        log_extract.debug(f"   → Split item: '{part}'")
             else:
                 # セパレーターがない場合はそのまま追加
                 result.append(item)
@@ -862,26 +1026,26 @@ A:{user_message}"""
                 match_ratio = len(chars_in_message) / len(value)
 
                 if match_ratio >= 0.5:  # 50%以上の文字が一致
-                    print(f"[Extraction] Partial match accepted: '{value}' (match ratio: {match_ratio:.1%})")
+                    log_extract.debug(f" Partial match accepted: '{value}' (match ratio: {match_ratio:.1%})")
                     filtered.append(item)
                     continue
 
             # ユーザーメッセージに含まれていない
-            print(f"[Extraction] Value '{value}' not found in user message '{user_message}'")
-            print(f"[Extraction] Rejected (not in user message): {item}")
+            log_extract.debug(f" Value '{value}' not found in user message '{user_message}'")
+            log_extract.debug(f" Rejected (not in user message): {item}")
 
         return filtered
 
     def _parse_extracted_data(self, text: str) -> List[Dict]:
         """抽出されたテキストからJSONデータをパース"""
         try:
-            print(f"[Extraction] Parsing text: {text[:500]}")
+            log_extract.debug(f" Parsing text: {text[:500]}")
 
             # JSONブロックを抽出
             json_match = re.search(r"\[.*\]", text, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
-                print(f"[Extraction] JSON string: {json_str[:300]}")
+                log_extract.debug(f" JSON string: {json_str[:300]}")
 
                 data = json.loads(json_str)
 
@@ -889,32 +1053,32 @@ A:{user_message}"""
                 valid_data = []
                 for item in data:
                     if not isinstance(item, dict):
-                        print(f"[Extraction] Invalid item (not dict): {item}")
+                        log_extract.debug(f" Invalid item (not dict): {item}")
                         continue
 
                     if not all(k in item for k in ["category", "key", "value"]):
-                        print(f"[Extraction] Invalid item (missing keys): {item}")
+                        log_extract.debug(f" Invalid item (missing keys): {item}")
                         continue
 
                     if item["category"] not in CATEGORIES:
-                        print(f"[Extraction] Invalid category: {item['category']}")
+                        log_extract.debug(f" Invalid category: {item['category']}")
                         continue
 
                     # 不正な値をフィルタリング
                     value = str(item["value"]).strip()
                     if not value:
-                        print(f"[Extraction] Invalid item (empty value): {item}")
+                        log_extract.debug(f" Invalid item (empty value): {item}")
                         continue
 
                     # 不正な値パターン
                     invalid_patterns = ["[]", "{}", "()", "null", "none", "undefined"]
                     if value.lower() in invalid_patterns:
-                        print(f"[Extraction] Invalid item (invalid value pattern): {item}")
+                        log_extract.debug(f" Invalid item (invalid value pattern): {item}")
                         continue
 
                     # 長さ1文字以下の記号のみは除外（ただし数字とひらがな・カタカナ・漢字は許可）
                     if len(value) <= 1 and not value.isalnum():
-                        print(f"[Extraction] Invalid item (single symbol): {item}")
+                        log_extract.debug(f" Invalid item (single symbol): {item}")
                         continue
 
                     # 有効なデータとして追加
@@ -922,14 +1086,14 @@ A:{user_message}"""
 
                 return valid_data
             else:
-                print(f"[Extraction] No JSON array found in text")
+                log_extract.debug(f" No JSON array found in text")
                 return []
         except json.JSONDecodeError as e:
-            print(f"[Extraction] JSON parse error: {e}")
-            print(f"[Extraction] Problematic text: {text[:500]}")
+            log_extract.debug(f" JSON parse error: {e}")
+            log_extract.debug(f" Problematic text: {text[:500]}")
             return []
         except Exception as e:
-            print(f"[Extraction] Parse error: {e}")
+            log_extract.debug(f" Parse error: {e}")
             return []
 
     def detect_correction(self, user_message: str, conversation_history: List[Dict]) -> bool:
@@ -948,7 +1112,7 @@ A:{user_message}"""
         user_message_lower = user_message.lower()
         for keyword in correction_keywords:
             if keyword in user_message_lower:
-                print(f"[Correction] Detected correction keyword: {keyword}")
+                log_correction.debug(f"Detected correction keyword: {keyword}")
                 return True
 
         # 会話履歴をチェック（最後の2つのメッセージを確認）
@@ -968,7 +1132,7 @@ A:{user_message}"""
                     if ack in assistant_content:
                         # 同時に前のユーザー発言への言及がある場合
                         if second_last_user and second_last_user.get('role') == 'user':
-                            print(f"[Correction] Detected correction acknowledgment: {ack}")
+                            log_correction.debug(f"Detected correction acknowledgment: {ack}")
                             return True
 
         return False
@@ -1001,7 +1165,7 @@ A:{user_message}"""
         is_short_message = len(user_message.strip()) <= 30  # 短いメッセージは削除リクエストの可能性が高い
 
         if has_deletion_keyword and (has_target_keyword or is_short_message):
-            print(f"[Deletion] Detected deletion request in message: {user_message}")
+            log_correction.info(f"Detected deletion request in message: {user_message}")
             return True
 
         return False

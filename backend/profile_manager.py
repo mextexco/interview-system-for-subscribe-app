@@ -9,6 +9,13 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from config import PROFILES_DIR, SESSIONS_DIR, CATEGORIES
 from data_validator import DataValidator
+from logger import get_logger
+
+# ロガー初期化
+log_validation = get_logger('Validation')
+log_normalize = get_logger('Normalize')
+log_data = get_logger('Data')
+log_undo = get_logger('Undo')
 
 
 class ProfileManager:
@@ -126,10 +133,25 @@ class ProfileManager:
         return session
 
     def add_extracted_data(self, session_id: str, category: str,
-                          key: str, value: any) -> Dict:
+                          key: str, value: any,
+                          subcategory1: str = None,
+                          subcategory2: str = None) -> Dict:
         """
-        抽出したプロファイリングデータを追加
-        Add extracted profiling data with validation
+        抽出したプロファイリングデータを追加（5階層対応）
+        Add extracted profiling data with validation (supports 5-layer hierarchy)
+
+        Args:
+            session_id: セッションID
+            category: カテゴリー（例: 趣味・興味・娯楽）※固定10カテゴリー
+            key: キー（例: 好きなチーム）
+            value: 値（例: マンチェスター・ユナイテッド）
+            subcategory1: サブカテゴリー1（例: スポーツ）※オプション
+            subcategory2: サブカテゴリー2（例: サッカー）※オプション
+
+        階層例:
+            5階層: 趣味・興味・娯楽 > スポーツ > サッカー > 好きなチーム: マンチェスター・ユナイテッド
+            3階層: 趣味・興味・娯楽 > サッカー > 好きなチーム: マンチェスター・ユナイテッド (subcategory1=None)
+            2階層: 趣味・興味・娯楽 > 趣味: サッカー (subcategory1=None, subcategory2=None)
         """
         session = self.get_session(session_id)
         if not session:
@@ -150,9 +172,9 @@ class ProfileManager:
         # 矛盾がある場合はスキップ / Skip if contradictions found
         if not validation_result["valid"]:
             contradictions = validation_result.get("contradictions", [])
-            print(f"[Validation] Data rejected: {contradictions}")
+            log_validation.info(f"Data rejected: {contradictions}")
             for contradiction in contradictions:
-                print(f"  - {contradiction}")
+                log_validation.info(f"  - {contradiction}")
 
             # 矛盾データは保存しない / Don't save contradictory data
             return session
@@ -160,9 +182,9 @@ class ProfileManager:
         # 警告がある場合はログ出力 / Log warnings if any
         warnings = validation_result.get("warnings", [])
         if warnings:
-            print(f"[Validation] Warnings for {category}/{key}:")
+            log_validation.warning(f"Warnings for {category}/{key}:")
             for warning in warnings:
-                print(f"  - {warning}")
+                log_validation.warning(f"  - {warning}")
 
         # 値を正規化 / Normalize value
         normalized_value = validator.normalize_value(category, key, value)
@@ -170,17 +192,31 @@ class ProfileManager:
         # 正規化が行われたかチェック / Check if normalization occurred
         normalization_occurred = normalized_value != value
         if normalization_occurred:
-            print(f"[Normalization] {category}/{key}: '{value}' → {normalized_value}")
+            log_normalize.debug(f"{category}/{key}: '{value}' → {normalized_value}")
 
         # 重複チェック / Check for duplicates
-        # 同じカテゴリー・キー・値の組み合わせが既に存在する場合はスキップ
+        # 同じカテゴリー・サブカテゴリー1・サブカテゴリー2・キー・値の組み合わせが既に存在する場合はスキップ
         for existing_item in existing_data:
-            if existing_item.get("key") == key:
+            # すべての階層が一致するかチェック
+            existing_subcat1 = existing_item.get("subcategory1")
+            existing_subcat2 = existing_item.get("subcategory2")
+            existing_key = existing_item.get("key")
+
+            if (existing_subcat1 == subcategory1 and
+                existing_subcat2 == subcategory2 and
+                existing_key == key):
                 existing_value = existing_item.get("value")
 
                 # 値の比較（正規化された値同士で比較）
                 if self._values_are_equal(normalized_value, existing_value):
-                    print(f"[Duplicate] Skipping duplicate data: {category}/{key} = {value}")
+                    path_parts = [category]
+                    if subcategory1:
+                        path_parts.append(subcategory1)
+                    if subcategory2:
+                        path_parts.append(subcategory2)
+                    path_parts.append(key)
+                    path_str = " > ".join(path_parts)
+                    log_data.debug(f"Skipping duplicate data: {path_str} = {value}")
                     return session
 
         # データエントリ作成 / Create data entry
@@ -188,8 +224,14 @@ class ProfileManager:
             "key": key,
             "value": normalized_value,
             "timestamp": datetime.now().isoformat(),
-            "data_version": "2.0"  # バージョン追跡
+            "data_version": "5.0"  # バージョン追跡（5階層対応）
         }
+
+        # サブカテゴリーがある場合は追加
+        if subcategory1 is not None:
+            data_entry["subcategory1"] = subcategory1
+        if subcategory2 is not None:
+            data_entry["subcategory2"] = subcategory2
 
         # 正規化が行われた場合は元の値も保存 / Save original value if normalized
         if normalization_occurred:
@@ -279,7 +321,7 @@ class ProfileManager:
 
         # 会話が2件未満の場合は取り消せない（初期メッセージのみ）
         if len(conversation) < 2:
-            print("[Undo] Not enough messages to undo")
+            log_undo.info("Not enough messages to undo")
             return {"success": False, "message": "取り消せるメッセージがありません"}
 
         # 最後の2つのメッセージを確認（user → assistant のペア）
@@ -290,7 +332,7 @@ class ProfileManager:
             removed_messages.append(conversation.pop())
             assistant_timestamp = removed_messages[0]["timestamp"]
         else:
-            print("[Undo] Last message is not from assistant")
+            log_undo.warning("Last message is not from assistant")
             return {"success": False, "message": "最後のメッセージがAIの応答ではありません"}
 
         # その前がuserの場合
@@ -300,10 +342,10 @@ class ProfileManager:
         else:
             # assistantメッセージを戻す
             conversation.append(removed_messages[0])
-            print("[Undo] No user message before assistant message")
+            log_undo.warning("No user message before assistant message")
             return {"success": False, "message": "対応するユーザーメッセージが見つかりません"}
 
-        print(f"[Undo] Removed messages: user at {user_timestamp}, assistant at {assistant_timestamp}")
+        log_undo.info(f"Removed messages: user at {user_timestamp}, assistant at {assistant_timestamp}")
 
         # そのターンで抽出されたデータを削除（timestampで判定）
         removed_data_count = 0
@@ -317,13 +359,13 @@ class ProfileManager:
             ]
             removed_count = original_count - len(session["extracted_data"][category])
             if removed_count > 0:
-                print(f"[Undo] Removed {removed_count} data points from {category}")
+                log_undo.debug(f"Removed {removed_count} data points from {category}")
                 removed_data_count += removed_count
 
         # セッションを保存
         self._save_session(session_id, session)
 
-        print(f"[Undo] Successfully removed last turn and {removed_data_count} data points")
+        log_undo.info(f"Successfully removed last turn and {removed_data_count} data points")
 
         return {
             "success": True,
