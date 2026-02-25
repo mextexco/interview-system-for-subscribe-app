@@ -472,10 +472,10 @@ function getVoiceSettings(characterId) {
         },
         'kenta': {
             pitch: 0.8,  // 低め（男性）
-            rate: 1.25,  // やや速め（0.95 → 1.25）
+            rate: 1.5,   // 1.5倍速（0.95 → 1.25 → 1.5）
             volume: 1.0,
             voicevoxSpeaker: 13,  // 青山龍星（落ち着いた男性）
-            voicevoxSpeed: 1.15
+            voicevoxSpeed: 1.5   // 1.5倍速
         },
         'aoi': {
             pitch: 1.0,  // 標準（中性）

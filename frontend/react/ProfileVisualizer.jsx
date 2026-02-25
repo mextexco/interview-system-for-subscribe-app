@@ -61,7 +61,7 @@ const ProfileVisualizer = ({ data, userName }) => {
                 hierarchy[category] = {};
             }
             items.forEach(item => {
-                const subcat = item.key || 'その他';
+                const subcat = item.key || '';
                 // Use original_value if normalization occurred, otherwise use value
                 const value = item.original_value || item.value;
 
@@ -84,13 +84,13 @@ const ProfileVisualizer = ({ data, userName }) => {
             const prevCategoryData = previousDataRef.current[category] || [];
 
             items.forEach(item => {
-                const subcat = item.key || 'その他';
+                const subcat = item.key || '';
                 // Use original_value if normalization occurred, otherwise use value
                 const value = item.original_value || item.value;
 
                 // Check if this exact item existed before
                 const existedBefore = prevCategoryData.some(prevItem => {
-                    const prevSubcat = prevItem.key || 'その他';
+                    const prevSubcat = prevItem.key || '';
                     const prevValue = prevItem.original_value || prevItem.value;
                     return prevSubcat === subcat && prevValue === value;
                 });

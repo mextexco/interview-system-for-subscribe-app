@@ -147,23 +147,60 @@ class Interviewer:
                             log_debug.debug(f"Inferred user name from conversation: {user_name}")
 
 
-        # 会話履歴から同じトピックの連続質問数をカウント
-        consecutive_questions = self._count_consecutive_questions(session_data)
+        # 会話履歴から同じトピック（サブカテゴリー1レベル）の連続質問数をカウント
+        consecutive_info = self._count_consecutive_questions(session_data)
+        consecutive_count = consecutive_info['count']
+        current_topic = consecutive_info['topic_identifier']
 
         # 会話戦略部分を条件分岐
         if user_name:
             # 名前が既に分かっている場合
             topic_change_strategy = ""
-            if consecutive_questions >= 3:
-                topic_change_strategy = f"""
-【重要: 話題転換のタイミング】
-同じトピックで{consecutive_questions}回連続して質問しています。
-次のいずれかの対応をしてください：
-1. 別の話題に自然に移行する（「そういえば〜」「ところで〜」）
-2. ユーザーに選択肢を提示：「このまま掘り下げる？それとも別の話題にする？」
-3. 一旦まとめて、新しいカテゴリーの質問をする
+            if consecutive_count >= 3:
+                # ユーザーのエンゲージメントレベルを分析
+                engagement = self._analyze_user_engagement(session_data)
 
-単調な質問の連続を避け、会話に変化を持たせましょう。"""
+                log_debug.info(f"⚠️ Topic switch required: {consecutive_count} consecutive on '{current_topic}' (engagement: {engagement})")
+                log_debug.debug(f"Adding topic change instructions to system prompt with {engagement} engagement strategy")
+
+                if engagement == 'high':
+                    # 高エンゲージメント: 自然な移行を推奨
+                    topic_change_strategy = f"""
+【🚨 必須指示: 話題転換が必要です】
+現在「{current_topic}」について{consecutive_count}回連続で質問しています。
+この話題はここまでとします。
+
+**必ず次の質問で別のトピックに切り替えてください。**
+
+推奨される切り替え方法（自然な移行）:
+1. 現在の話題を簡単にまとめる（1文程度）
+2. 「ところで」「そういえば」などで自然に別の話題に移行
+3. 空白カテゴリーまたは未掘り下げのトピックから質問を選ぶ
+
+例:
+「{current_topic}、楽しそうですね！ところで、普段どんなお仕事をされてますか？」
+
+⚠️ 注意: 同じ「{current_topic}」について続けて質問することは禁止です。
+別のカテゴリーまたは別のサブトピックに必ず切り替えてください。"""
+                else:
+                    # 低エンゲージメント: 明示的な切り替えを推奨
+                    topic_change_strategy = f"""
+【🚨 必須指示: 話題転換が必要です】
+現在「{current_topic}」について{consecutive_count}回連続で質問しています。
+ユーザーの回答が短いため、この話題はここまでとします。
+
+**必ず次の質問で別のトピックに切り替えてください。**
+
+推奨される切り替え方法（明示的な切り替え）:
+1. 「なるほど、ありがとうございます！」と締めくくる
+2. 「では、別の話題に移りますね」と明示的に宣言
+3. 全く異なるカテゴリーから質問を選ぶ
+
+例:
+「なるほど、ありがとうございます！では、普段の生活リズムについて聞いてもいいですか？」
+
+⚠️ 注意: 同じ「{current_topic}」について続けて質問することは禁止です。
+別のカテゴリーまたは別のサブトピックに必ず切り替えてください。"""
 
             conversation_strategy = f"""【重要】
 相手の名前は「{user_name}」です。すでに名前を知っています。
@@ -302,6 +339,16 @@ class Interviewer:
             AIの応答テキスト
         """
         try:
+            # 話題切り替えが必要かチェック
+            consecutive_info = self._count_consecutive_questions(session_data)
+            consecutive_count = consecutive_info['count']
+            current_topic = consecutive_info['topic_identifier']
+
+            topic_switch_required = consecutive_count >= 3
+
+            if topic_switch_required:
+                log_debug.info(f"⚠️ Topic switch required: {consecutive_count} consecutive on '{current_topic}'")
+
             # システムプロンプトを生成
             system_prompt = self.generate_system_prompt(
                 character_id, profile, category_counts, empty_categories, greeting_already_sent, session_data
@@ -344,6 +391,37 @@ class Interviewer:
                     log_lm.warning(f"Cleaned message is empty! Raw response was: {assistant_message[:500]}")
                     return None
 
+                # ⚙️ 話題切り替え検証（必要な場合のみ）
+                if topic_switch_required and current_topic:
+                    log_debug.info(f"Verifying topic switch from '{current_topic}'...")
+
+                    # LLMが実際に話題を切り替えたか検証
+                    switch_successful = self._verify_topic_switch(
+                        final_message,
+                        current_topic,
+                        session_data
+                    )
+
+                    if not switch_successful:
+                        log_debug.warning(f"LLM failed to switch topic, forcing regeneration...")
+
+                        # 強制的に話題を切り替えた質問を再生成
+                        forced_message = self._force_topic_change(
+                            messages,
+                            character_id,
+                            profile,
+                            category_counts,
+                            empty_categories,
+                            current_topic,
+                            session_data
+                        )
+
+                        log_debug.info(f"📊 Topic switch completed via forced regeneration from '{current_topic}'")
+                        return forced_message
+                    else:
+                        log_debug.info(f"✅ Topic switch verification passed - LLM successfully moved away from '{current_topic}'")
+                        log_debug.info(f"📊 Topic switch completed naturally from '{current_topic}'")
+
                 return final_message
             else:
                 log_lm.error(f"LM Studio error: {response.status_code}")
@@ -363,17 +441,32 @@ class Interviewer:
             log_lm.error(f"Error getting response: {e}")
             return None
 
-    def _count_consecutive_questions(self, session_data: Dict) -> int:
+    def _count_consecutive_questions(self, session_data: Dict) -> Dict:
         """
-        会話履歴から同じトピックの連続質問数をカウント
-        直近の抽出データを分析して、同じカテゴリーが連続している回数を数える
+        会話履歴から同じトピック（サブカテゴリー1レベル）の連続質問数をカウント
+        直近の抽出データを分析して、同じカテゴリー+サブカテゴリー1が連続している回数を数える
+
+        Returns:
+            dict: {
+                'count': 連続質問数,
+                'category': 最新のカテゴリー,
+                'subcategory1': 最新のサブカテゴリー1（なければNone）,
+                'topic_identifier': トピック識別子（表示用）
+            }
         """
+        default_result = {
+            'count': 0,
+            'category': None,
+            'subcategory1': None,
+            'topic_identifier': None
+        }
+
         if not session_data or 'extracted_data' not in session_data:
-            return 0
+            return default_result
 
         extracted_data = session_data['extracted_data']
         if not extracted_data:
-            return 0
+            return default_result
 
         # 全カテゴリーのデータをタイムスタンプ順にソート（最新データは配列の最後）
         all_items = []
@@ -385,21 +478,83 @@ class Interviewer:
                 })
 
         if len(all_items) < 2:
-            return 0
+            return default_result
 
-        # 最新のカテゴリーを取得
-        latest_category = all_items[-1]['category']
+        # 最新のアイテムを取得
+        latest_item = all_items[-1]
+        latest_category = latest_item['category']
+        latest_subcategory1 = latest_item['item'].get('subcategory1')
 
-        # 後ろから数えて同じカテゴリーが何回連続しているか
-        consecutive_count = 0
-        for i in range(len(all_items) - 1, -1, -1):
-            if all_items[i]['category'] == latest_category:
-                consecutive_count += 1
-            else:
-                break
+        # subcategory1がない場合は、カテゴリーレベルにフォールバック
+        if not latest_subcategory1:
+            log_debug.debug("No subcategory1 found, falling back to category-level counting")
 
-        log_debug.debug(f"Latest category: {latest_category}, Consecutive: {consecutive_count}")
-        return consecutive_count
+            # 後ろから数えて同じカテゴリーが何回連続しているか
+            consecutive_count = 0
+            for i in range(len(all_items) - 1, -1, -1):
+                if all_items[i]['category'] == latest_category:
+                    consecutive_count += 1
+                else:
+                    break
+
+            topic_identifier = latest_category
+        else:
+            # サブカテゴリー1レベルでカウント
+            consecutive_count = 0
+            for i in range(len(all_items) - 1, -1, -1):
+                item = all_items[i]
+                item_category = item['category']
+                item_subcat1 = item['item'].get('subcategory1')
+
+                # カテゴリーとサブカテゴリー1の両方が一致する場合のみカウント
+                if item_category == latest_category and item_subcat1 == latest_subcategory1:
+                    consecutive_count += 1
+                else:
+                    break
+
+            topic_identifier = f"{latest_category}/{latest_subcategory1}"
+
+        log_debug.debug(f"Consecutive count: {consecutive_count} for topic '{topic_identifier}'")
+
+        return {
+            'count': consecutive_count,
+            'category': latest_category,
+            'subcategory1': latest_subcategory1,
+            'topic_identifier': topic_identifier
+        }
+
+    def _analyze_user_engagement(self, session_data: Dict) -> str:
+        """
+        ユーザーのエンゲージメントレベルを分析
+        直近3回のユーザーメッセージの平均長から、積極的に会話しているかを判定
+
+        Returns:
+            'high': 積極的に会話している（平均20文字以上）
+            'low': 短い回答が続いている（平均20文字未満）
+        """
+        if not session_data or 'conversation' not in session_data:
+            return 'low'
+
+        conversation = session_data['conversation']
+
+        # 最後から6メッセージを取得し、userメッセージのみ抽出（最大3件）
+        recent_user_messages = [
+            msg['content'] for msg in conversation[-6:]
+            if msg.get('role') == 'user'
+        ][-3:]
+
+        if not recent_user_messages:
+            return 'low'
+
+        # 平均文字数を計算
+        avg_length = sum(len(msg) for msg in recent_user_messages) / len(recent_user_messages)
+
+        # しきい値: 20文字
+        engagement_level = 'high' if avg_length >= 20 else 'low'
+
+        log_debug.debug(f"User engagement: {engagement_level} (avg message length: {avg_length:.1f} chars)")
+
+        return engagement_level
 
     def _clean_response(self, text: str) -> str:
         """AI応答から内部コメントや不要な記号を除去"""
@@ -427,6 +582,265 @@ class Interviewer:
         cleaned = re.sub(r'\s+', ' ', cleaned)
 
         return cleaned.strip()
+
+    def _verify_topic_switch(self, assistant_response: str,
+                            forbidden_topic: str,
+                            session_data: Dict) -> bool:
+        """
+        アシスタントの応答が禁止トピックから切り替わったかを検証
+
+        Args:
+            assistant_response: AIの生成した応答
+            forbidden_topic: 避けるべきトピック（例: "趣味・興味・娯楽/ゲーム"）
+            session_data: セッションデータ
+
+        Returns:
+            True: 話題切り替え成功, False: まだ同じ話題
+        """
+        if not forbidden_topic:
+            return True
+
+        log_debug.debug(f"🔍 Starting topic switch verification for forbidden topic: '{forbidden_topic}'")
+
+        # 禁止トピックからカテゴリーとサブカテゴリー1を抽出
+        if '/' in forbidden_topic:
+            forbidden_category, forbidden_subcat1 = forbidden_topic.split('/', 1)
+        else:
+            forbidden_category = forbidden_topic
+            forbidden_subcat1 = None
+
+        # サブカテゴリー1ごとのキーワードマッピング
+        subcategory_keywords = {
+            # 趣味・興味・娯楽
+            'ゲーム': ['ゲーム', 'プレイ', 'ゲーマー', 'RPG', 'アクション', 'パズル', 'ストラテジー', 'シミュレーション', 'eスポーツ', 'ソシャゲ', 'コンシューマー'],
+            'スポーツ': ['スポーツ', '運動', 'サッカー', '野球', 'バスケ', 'テニス', 'ジム', 'トレーニング', '筋トレ', 'ランニング', 'マラソン', '試合', 'チーム'],
+            '読書': ['読書', '本', '小説', 'マンガ', '漫画', '雑誌', '書籍', '文庫', '図書', '著者', '作家', 'ページ'],
+            '映画': ['映画', 'ムービー', 'シネマ', '監督', '俳優', '女優', '作品', '劇場', 'DVD', 'Netflix', '配信'],
+            '音楽': ['音楽', '曲', 'アーティスト', 'バンド', 'ライブ', 'コンサート', '歌', '楽器', 'フェス', 'Spotify', 'プレイリスト'],
+            'アニメ': ['アニメ', 'アニメーション', '声優', 'オタク', '作画', 'キャラ', 'キャラクター', '2期', 'クール'],
+            '料理': ['料理', '調理', 'レシピ', '食材', '包丁', 'キッチン', '味付け', '自炊', 'クッキング'],
+            '旅行': ['旅行', '観光', '旅', 'ツアー', '旅先', '宿', 'ホテル', '海外', '国内', '旅館', '温泉'],
+            'グルメ': ['グルメ', '食事', 'レストラン', '飲食', '食べ歩き', '美食', 'カフェ', '外食'],
+            'お酒': ['お酒', '飲酒', 'ビール', 'ワイン', '日本酒', '焼酎', 'カクテル', 'バー', '居酒屋', '酒'],
+            'ペット': ['ペット', '犬', '猫', '動物', '飼育', '散歩', 'わんこ', 'にゃんこ'],
+            'ドライブ': ['ドライブ', '運転', '車', 'カー', '自動車', 'クルマ', 'ドライブ'],
+            'アウトドア': ['アウトドア', 'キャンプ', '登山', 'ハイキング', '釣り', 'バーベキュー', 'BBQ', '山', 'テント'],
+            'インドア': ['インドア', '家', '部屋', '室内', 'おうち時間', '在宅'],
+
+            # 基本プロフィール・仕事
+            '仕事': ['仕事', '職業', '勤務', '会社', '職場', '業務', 'プロジェクト', '出勤', 'ビジネス', '勤め'],
+            '職歴': ['職歴', '転職', 'キャリア', '経歴', '社会人', '就職', '入社'],
+
+            # 学習・成長
+            '学習': ['学習', '勉強', '資格', 'スキル', '習得', 'トレーニング', '学校', '教育', '講座'],
+            '学歴': ['学歴', '学校', '大学', '高校', '専門', '卒業', '進学'],
+
+            # 健康・ライフスタイル
+            '健康': ['健康', '体調', '病気', '医療', '診察', '治療', '症状', '病院', '通院'],
+            '睡眠': ['睡眠', '寝る', '起床', '就寝', '眠り', '寝付き', '寝不足', '朝'],
+            '食事': ['食事', '朝食', '昼食', '夕食', '栄養', '食べる', '食生活', '食習慣'],
+            '運動': ['運動', 'エクササイズ', '体操', 'ヨガ', 'ストレッチ', '身体', '体力'],
+
+            # 現在の生活
+            '住環境': ['住環境', '住まい', '家', '部屋', 'マンション', 'アパート', '引っ越し', '賃貸', '持ち家'],
+            '生活リズム': ['生活リズム', '生活パターン', '1日', 'ルーティン', '習慣', 'スケジュール'],
+
+            # 人間関係・コミュニティ
+            '家族': ['家族', '親', '父', '母', '兄弟', '姉妹', '子供', '夫', '妻', 'パートナー', '息子', '娘'],
+            '友人': ['友人', '友達', '仲間', 'フレンド', '知人', '付き合い'],
+            'コミュニティ': ['コミュニティ', 'グループ', 'サークル', '集まり', 'つながり', '団体'],
+
+            # 情報収集・メディア
+            'SNS': ['SNS', 'Twitter', 'Instagram', 'Facebook', 'TikTok', 'LINE', 'ソーシャル', '投稿', 'フォロー'],
+            'ニュース': ['ニュース', '報道', '新聞', 'ネット', '情報', 'メディア', 'Web'],
+
+            # 経済・消費
+            '買い物': ['買い物', 'ショッピング', '購入', '通販', 'Amazon', '楽天', 'お買い物'],
+            'お金': ['お金', '貯金', '貯蓄', '資産', '投資', '金融', '経済', '節約', 'マネー'],
+
+            # 価値観・将来
+            '夢': ['夢', '目標', '志', 'やりたいこと', '憧れ', '理想'],
+            '目標': ['目標', 'ゴール', '達成', '計画', '将来'],
+            '人生観': ['人生観', '価値観', '考え方', '信念', '哲学', '大切', '重視'],
+        }
+
+        # 禁止トピックのキーワードをチェック
+        if forbidden_subcat1 and forbidden_subcat1 in subcategory_keywords:
+            keywords = subcategory_keywords[forbidden_subcat1]
+            response_lower = assistant_response.lower()
+
+            # キーワードマッチ数をカウント
+            matched_keywords = [kw for kw in keywords if kw.lower() in response_lower]
+            matches = len(matched_keywords)
+
+            # 2個以上のキーワードが見つかった場合、まだ同じ話題
+            if matches >= 2:
+                log_debug.warning(f"❌ Topic switch FAILED: found {matches} keywords for '{forbidden_subcat1}': {matched_keywords[:5]}")
+                return False
+            elif matches == 1:
+                log_debug.debug(f"Found 1 keyword for '{forbidden_subcat1}': {matched_keywords}, allowing switch")
+
+        # 話題切り替え成功
+        log_debug.info(f"✅ Topic switch SUCCESSFUL: moved away from '{forbidden_topic}'")
+        return True
+
+    def _choose_next_topic(self, category_counts: Dict[str, int],
+                          empty_categories: List[str],
+                          forbidden_category: str,
+                          session_data: Dict) -> str:
+        """
+        次のトピックを戦略的に選択
+
+        優先順位:
+        1. 空カテゴリー（未収集のカテゴリー）
+        2. データ数が最も少ないカテゴリー
+        3. 禁止カテゴリー以外のランダムカテゴリー
+
+        Args:
+            category_counts: カテゴリーごとのデータ数
+            empty_categories: 空カテゴリーのリスト
+            forbidden_category: 避けるべきカテゴリー
+            session_data: セッションデータ
+
+        Returns:
+            次のトピック名（例: "現在の生活", "健康・ライフスタイル"）
+        """
+        import random
+
+        # 優先度1: 空カテゴリー（禁止カテゴリーを除く）
+        available_empty = [cat for cat in empty_categories if cat != forbidden_category]
+        if available_empty:
+            chosen = random.choice(available_empty)
+            log_debug.debug(f"Chose empty category: {chosen}")
+            return chosen
+
+        # 優先度2: データ数が最も少ないカテゴリー（禁止カテゴリーを除く）
+        sorted_categories = sorted(
+            [(cat, count) for cat, count in category_counts.items() if cat != forbidden_category],
+            key=lambda x: x[1]
+        )
+
+        if sorted_categories:
+            # 下位3カテゴリーからランダムに選択（バリエーションを持たせる）
+            candidates = sorted_categories[:min(3, len(sorted_categories))]
+            chosen = random.choice(candidates)
+            log_debug.debug(f"Chose least-explored category: {chosen[0]} ({chosen[1]} items)")
+            return chosen[0]
+
+        # 優先度3: 禁止カテゴリー以外のランダムカテゴリー
+        all_categories = list(CATEGORIES.keys())
+        available = [cat for cat in all_categories if cat != forbidden_category]
+
+        if available:
+            chosen = random.choice(available)
+            log_debug.debug(f"Chose random available category: {chosen}")
+            return chosen
+
+        # フォールバック: 最初のカテゴリー
+        fallback = list(CATEGORIES.keys())[0]
+        log_debug.warning(f"Using fallback category: {fallback}")
+        return fallback
+
+    def _force_topic_change(self, messages: List[Dict], character_id: str,
+                           profile: Dict, category_counts: Dict[str, int],
+                           empty_categories: List[str],
+                           forbidden_topic: str,
+                           session_data: Dict) -> str:
+        """
+        話題切り替えに失敗した場合、強制的に別のトピックで質問を再生成
+
+        Args:
+            messages: 会話履歴
+            character_id: キャラクターID
+            profile: ユーザープロファイル
+            category_counts: カテゴリーごとのデータ数
+            empty_categories: 空カテゴリーのリスト
+            forbidden_topic: 避けるべきトピック
+            session_data: セッションデータ
+
+        Returns:
+            新しい質問（別のトピック）
+        """
+        # 禁止トピックからカテゴリーを抽出
+        if '/' in forbidden_topic:
+            forbidden_category, forbidden_subcat1 = forbidden_topic.split('/', 1)
+        else:
+            forbidden_category = forbidden_topic
+            forbidden_subcat1 = None
+
+        # 次のトピックを選択
+        next_topic = self._choose_next_topic(
+            category_counts,
+            empty_categories,
+            forbidden_category,
+            session_data
+        )
+
+        log_debug.info(f"🔄 Forcing topic change: '{forbidden_topic}' → '{next_topic}'")
+
+        # キャラクター情報を取得
+        character = CHARACTERS.get(character_id, CHARACTERS["aoi"])
+
+        # 強制的なシステムプロンプトを生成
+        forced_prompt = f"""あなたは{character['name']}、{character['description']}です。
+
+【🚨 緊急指示】
+前の話題「{forbidden_topic}」の掘り下げを終了します。
+今から必ず「{next_topic}」について質問してください。
+
+指示:
+1. 前の話題を簡単に締めくくる（1文、または省略可）
+2. 「では」「ところで」などで切り替える
+3. 「{next_topic}」に関する質問を1つする
+4. 質問は簡潔に（15-30文字程度）
+
+例:
+「なるほど！では、普段のお仕事について教えてください。」
+「ところで、健康面で気をつけていることはありますか？」
+
+必ず日本語で、{character['tone']}に応答してください。
+絶対に「{forbidden_topic}」について質問しないでください。"""
+
+        try:
+            # LM Studioに強制リクエスト
+            response = requests.post(
+                self.lm_studio_url,
+                json={
+                    "model": LM_STUDIO_MODEL,
+                    "messages": [
+                        {"role": "system", "content": forced_prompt},
+                        {"role": "user", "content": messages[-1]['content']}  # 最後のユーザーメッセージ
+                    ],
+                    "max_tokens": 100,
+                    "temperature": 0.7,
+                    "stream": False
+                },
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                forced_response = result["choices"][0]["message"]["content"]
+                cleaned_response = self._clean_response(forced_response)
+
+                log_debug.info(f"✅ Forced topic change successful: '{forbidden_topic}' → '{next_topic}'")
+                return cleaned_response
+
+            # レスポンス取得失敗
+            log_debug.warning(f"Forced LLM call failed with status {response.status_code}")
+
+        except Exception as e:
+            log_debug.error(f"Error in forced topic change: {e}")
+
+        # フォールバック: suggest_next_topicを使用
+        log_debug.warning("Forced LLM call failed, using fallback question")
+        fallback_question = self.suggest_next_topic(empty_categories, character_id)
+
+        if fallback_question:
+            return fallback_question
+        else:
+            # 最終フォールバック
+            return "他に何か教えていただけますか？"
 
     def generate_greeting(self, character_id: str, user_name: str = None) -> str:
         """挨拶メッセージを生成"""
@@ -1100,6 +1514,8 @@ JSON配列 [] だけを出力してください。
         """
         ユーザーが前の回答を訂正しているかどうかを検出
         Detect if the user is correcting their previous response
+
+        重要: 現在のユーザーメッセージに訂正キーワードが含まれている場合のみ訂正と判定
         """
         # 訂正を示すキーワード
         correction_keywords = [
@@ -1112,35 +1528,20 @@ JSON配列 [] だけを出力してください。
         user_message_lower = user_message.lower()
         for keyword in correction_keywords:
             if keyword in user_message_lower:
-                log_correction.debug(f"Detected correction keyword: {keyword}")
+                log_correction.debug(f"Detected correction keyword in user message: {keyword}")
                 return True
 
-        # 会話履歴をチェック（最後の2つのメッセージを確認）
-        if len(conversation_history) >= 2:
-            last_assistant = conversation_history[-1]
-            second_last_user = conversation_history[-2] if len(conversation_history) >= 2 else None
-
-            # アシスタントが訂正を認識した表現をしているかチェック
-            if last_assistant.get('role') == 'assistant':
-                assistant_content = last_assistant.get('content', '')
-                correction_acknowledgments = [
-                    '承知しました', 'わかりました', '了解',
-                    '訂正します', '修正します'
-                ]
-
-                for ack in correction_acknowledgments:
-                    if ack in assistant_content:
-                        # 同時に前のユーザー発言への言及がある場合
-                        if second_last_user and second_last_user.get('role') == 'user':
-                            log_correction.debug(f"Detected correction acknowledgment: {ack}")
-                            return True
-
+        # 訂正キーワードがない場合は訂正ではない
+        # 注意: 以前の実装では会話履歴の「承知しました」などで判定していたが、
+        # これは誤検出の原因となるため削除
         return False
 
     def detect_deletion_request(self, user_message: str) -> bool:
         """
         ユーザーが前の回答の削除を要求しているかどうかを検出
         Detect if the user is requesting to delete their previous response
+
+        重要: 削除キーワードとターゲットキーワードの両方が必須
         """
         # 削除を示すキーワード
         deletion_keywords = [
@@ -1160,11 +1561,12 @@ JSON配列 [] だけを出力してください。
         # 削除キーワードが含まれているかチェック
         has_deletion_keyword = any(keyword in user_message_lower for keyword in deletion_keywords)
 
-        # 対象キーワードが含まれているか、または短いメッセージの場合
+        # 対象キーワードが含まれているかチェック
         has_target_keyword = any(keyword in user_message_lower for keyword in target_keywords)
-        is_short_message = len(user_message.strip()) <= 30  # 短いメッセージは削除リクエストの可能性が高い
 
-        if has_deletion_keyword and (has_target_keyword or is_short_message):
+        # 削除リクエストと判定するには、削除キーワードとターゲットキーワードの両方が必要
+        # 注意: 以前は「短いメッセージ」でも判定していたが、誤検出の原因となるため削除
+        if has_deletion_keyword and has_target_keyword:
             log_correction.info(f"Detected deletion request in message: {user_message}")
             return True
 

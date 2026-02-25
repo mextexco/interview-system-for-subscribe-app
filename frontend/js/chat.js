@@ -45,6 +45,27 @@ async function checkLMStudioConnection() {
 }
 
 /**
+ * バージョン情報を取得
+ */
+async function fetchVersionInfo() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/version`);
+        const data = await response.json();
+
+        const backendVersionEl = document.getElementById('backendVersion');
+        if (backendVersionEl && data.backend_version) {
+            backendVersionEl.textContent = data.backend_version;
+        }
+    } catch (error) {
+        console.error('Version fetch error:', error);
+        const backendVersionEl = document.getElementById('backendVersion');
+        if (backendVersionEl) {
+            backendVersionEl.textContent = 'Error';
+        }
+    }
+}
+
+/**
  * スタートモーダルを表示
  */
 function showStartModal() {
@@ -359,6 +380,9 @@ async function sendMessage() {
             }
         }
 
+        // 🚀 バックグラウンドデータ抽出の完了を待って自動更新
+        // 戦略: 2秒 → +3秒(合計5秒) → +3秒(合計8秒)
+
         // プロファイル更新
         currentProfile = data.profile;
         if (typeof updateStatusDisplay === 'function') {
@@ -376,48 +400,115 @@ async function sendMessage() {
         // メッセージカウントを増やす
         messageCount++;
 
-        // 🚀 バックグラウンドデータ抽出の完了を待って自動更新
-        // 戦略: 2秒で早期チェック（50%カバー）→ 5秒で確実チェック（100%カバー）
-
-        // 現在のデータ数をキャプチャ（この時点での値）
-        let autoUpdateBaselineCount = currentProfile.total_data_count || 0;
+        // 【重要】ベースラインをセッションから直接取得（より確実）
+        let autoUpdateBaselineCount = 0;
+        try {
+            const baselineSessionResponse = await fetch(`${API_BASE_URL}/session/${currentSessionId}`);
+            const baselineSessionData = await baselineSessionResponse.json();
+            const baselineSession = baselineSessionData.session || baselineSessionData;
+            const baselineExtractedData = baselineSession.extracted_data || {};
+            Object.values(baselineExtractedData).forEach(items => {
+                autoUpdateBaselineCount += (items && items.length) || 0;
+            });
+            console.log(`[AutoUpdate] 🎯 Baseline count from session: ${autoUpdateBaselineCount}`);
+        } catch (error) {
+            console.error('[AutoUpdate] Failed to get baseline from session:', error);
+            autoUpdateBaselineCount = 0;
+        }
 
         const checkForNewData = async (timing) => {
             try {
                 console.log(`[AutoUpdate] Checking for new data at ${timing}...`);
+                console.log(`[AutoUpdate] Current baseline: ${autoUpdateBaselineCount}`);
 
-                // ユーザーデータを再取得
-                const response = await fetch(`${API_BASE_URL}/user/${currentUserId}`);
-                const data = await response.json();
+                // セッションデータを直接取得（より確実）
+                const sessionResponse = await fetch(`${API_BASE_URL}/session/${currentSessionId}`);
+                const sessionData = await sessionResponse.json();
+                const session = sessionData.session || sessionData;
 
-                const updatedProfile = data.profile;
-                const newDataCount = updatedProfile.total_data_count || 0;
+                // extracted_data から実際のアイテム数をカウント
+                const extractedData = session.extracted_data || {};
+                let actualItemCount = 0;
+                Object.values(extractedData).forEach(items => {
+                    actualItemCount += (items && items.length) || 0;
+                });
 
-                if (newDataCount > autoUpdateBaselineCount) {
-                    console.log(`[AutoUpdate] ✅ NEW DATA DETECTED at ${timing}! (+${newDataCount - autoUpdateBaselineCount} items)`);
+                console.log(`[AutoUpdate] Actual item count from session: ${actualItemCount}`);
 
-                    // プロファイルを更新
-                    currentProfile = updatedProfile;
-                    autoUpdateBaselineCount = newDataCount;  // ベースラインを更新（次回チェックのため）
+                if (actualItemCount > autoUpdateBaselineCount) {
+                    console.log(`[AutoUpdate] ✅ NEW DATA DETECTED at ${timing}! (+${actualItemCount - autoUpdateBaselineCount} items)`);
+
+                    // ユーザープロファイルも更新
+                    const userResponse = await fetch(`${API_BASE_URL}/user/${currentUserId}`);
+                    const userData = await userResponse.json();
+                    currentProfile = userData.profile;
+                    autoUpdateBaselineCount = actualItemCount;  // ベースラインを更新
 
                     // UI更新
                     if (typeof updateStatusDisplay === 'function') {
                         updateStatusDisplay(currentProfile, currentSessionId);
-                        console.log(`[AutoUpdate] UI updated with new data`);
+                        console.log(`[AutoUpdate] 🔄 UI updated with new data`);
                     }
+
+                    return true;  // データが見つかった
                 } else {
-                    console.log(`[AutoUpdate] No new data at ${timing}`);
+                    console.log(`[AutoUpdate] No new data at ${timing} (baseline: ${autoUpdateBaselineCount}, actual: ${actualItemCount})`);
+                    return false;  // データが見つからなかった
                 }
             } catch (error) {
                 console.error(`[AutoUpdate] Failed at ${timing}:`, error);
+                return false;
             }
         };
 
-        // 2秒後: 早期チェック（約50%のケースで成功）
-        setTimeout(() => checkForNewData('2s'), 2000);
+        // 1回目のチェック: 2秒後
+        setTimeout(async () => {
+            const found1 = await checkForNewData('2s');
 
-        // 5秒後: 確実チェック（残りのケースをカバー）
-        setTimeout(() => checkForNewData('5s'), 5000);
+            if (!found1) {
+                console.log('[AutoUpdate] No data at 2s, scheduling check at 5s...');
+
+                // 2回目のチェック: さらに3秒後（合計5秒後）
+                setTimeout(async () => {
+                    const found2 = await checkForNewData('5s (2s + 3s)');
+
+                    if (!found2) {
+                        console.log('[AutoUpdate] No data at 5s, scheduling check at 8s...');
+
+                        // 3回目のチェック: さらに3秒後（合計8秒後）
+                        setTimeout(async () => {
+                            const found3 = await checkForNewData('8s (2s + 3s + 3s)');
+
+                            if (!found3) {
+                                console.log('[AutoUpdate] No data at 8s, scheduling check at 12s...');
+
+                                // 4回目のチェック: さらに4秒後（合計12秒後）
+                                setTimeout(async () => {
+                                    const found4 = await checkForNewData('12s (2s + 3s + 3s + 4s)');
+
+                                    if (!found4) {
+                                        console.log('[AutoUpdate] No data at 12s, scheduling check at 16s...');
+
+                                        // 5回目のチェック: さらに4秒後（合計16秒後）
+                                        setTimeout(() => {
+                                            checkForNewData('16s (2s + 3s + 3s + 4s + 4s)');
+                                        }, 4000);
+                                    } else {
+                                        console.log('[AutoUpdate] Data found at 12s, stopping polling');
+                                    }
+                                }, 4000);
+                            } else {
+                                console.log('[AutoUpdate] Data found at 8s, stopping polling');
+                            }
+                        }, 3000);
+                    } else {
+                        console.log('[AutoUpdate] Data found at 5s, stopping polling');
+                    }
+                }, 3000);
+            } else {
+                console.log('[AutoUpdate] Data found at 2s, stopping polling');
+            }
+        }, 2000);
 
         // ランダムイベント判定
         if (typeof shouldTriggerEvent === 'function' && shouldTriggerEvent(messageCount)) {

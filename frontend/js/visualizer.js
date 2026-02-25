@@ -207,12 +207,14 @@ async function updateRecentData(sessionId) {
         const session = sessionData.session || sessionData;
         const extractedData = session.extracted_data || {};
 
-        // 全てのデータポイントを配列に変換
+        // 全てのデータポイントを配列に変換（5階層対応）
         let allDataPoints = [];
         Object.entries(extractedData).forEach(([category, items]) => {
             items.forEach(item => {
                 allDataPoints.push({
                     category: category,
+                    subcategory1: item.subcategory1 || null,
+                    subcategory2: item.subcategory2 || null,
                     key: item.key,
                     value: item.value,
                     timestamp: item.timestamp || Date.now()
@@ -265,8 +267,15 @@ async function updateRecentData(sessionId) {
                     }, 3000);
                 }
 
+                // 5階層対応: subcategory1とsubcategory2がある場合は表示に含める
+                const pathParts = [item.category];
+                if (item.subcategory1) pathParts.push(item.subcategory1);
+                if (item.subcategory2) pathParts.push(item.subcategory2);
+                pathParts.push(item.key);
+                const keyPath = pathParts.join(' > ') + ':';
+
                 itemDiv.innerHTML = `
-                    <span class="category-key">${item.category} - ${item.key}:</span>
+                    <span class="category-key">${keyPath}</span>
                     <span class="value">${displayValue}</span>
                 `;
                 listContainer.appendChild(itemDiv);

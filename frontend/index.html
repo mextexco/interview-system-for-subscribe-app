@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interview System - 音声対話型プロファイリング</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎤</text></svg>">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -27,6 +28,16 @@
                             <span id="lmStatusText">確認中...</span>
                         </div>
                         <div class="model-name" id="modelName">-</div>
+                    </div>
+                    <div class="version-info" id="versionInfo">
+                        <div class="version-item">
+                            <span class="version-label">Backend:</span>
+                            <span class="version-value" id="backendVersion">-</span>
+                        </div>
+                        <div class="version-item">
+                            <span class="version-label">Frontend:</span>
+                            <span class="version-value" id="frontendVersion">5.0</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -189,6 +200,9 @@
         document.addEventListener('DOMContentLoaded', () => {
             // LM Studio接続チェック
             checkLMStudioConnection();
+
+            // バージョン情報取得
+            fetchVersionInfo();
 
             // スタートモーダル表示
             showStartModal();
