@@ -15,7 +15,7 @@ body {
 /* メインコンテナ */
 .main-container {
     display: flex;
-    height: 100vh;
+    height: calc(100vh - 36px);
 }
 
 /* 左ペイン (30%) */
@@ -25,64 +25,90 @@ body {
     border-right: 1px solid #d2d2d7;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* キャラクターアバター */
 .character-avatar {
-    padding: 24px 16px;
-    text-align: center;
+    padding: 12px 16px;
     border-bottom: 1px solid #d2d2d7;
     background: #ffffff;
+    flex-shrink: 0;
 }
 
 .avatar-info {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .app-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-weight: 600;
-    font-size: 17px;
+    font-size: 15px;
     color: #1d1d1f;
 }
 
 .app-icon {
-    font-size: 22px;
+    font-size: 18px;
 }
 
 .app-name {
-    font-size: 17px;
+    font-size: 15px;
+}
+
+.app-subtitle {
+    font-size: 10px;
+    color: #86868b;
+    background: #f0f0f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+}
+
+/* キャラ画像と情報を横並び */
+.avatar-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .avatar-placeholder {
-    width: 80px;
-    height: 80px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
     background: #e5e5ea;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 40px;
+    font-size: 36px;
+    flex-shrink: 0;
+}
+
+/* キャラ名・ステータスの縦並び（画像の右側） */
+.avatar-details {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
 }
 
 .character-name {
     font-weight: 600;
     color: #1d1d1f;
-    font-size: 17px;
+    font-size: 14px;
     margin: 0;
 }
 
 .status-info {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
+    align-items: flex-start;
+    gap: 2px;
+    font-size: 11px;
     color: #86868b;
 }
 
@@ -119,10 +145,10 @@ body {
 .version-info {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    margin-top: 8px;
-    padding-top: 8px;
+    align-items: flex-start;
+    gap: 1px;
+    margin-top: 4px;
+    padding-top: 4px;
     border-top: 1px solid #e5e5ea;
 }
 
@@ -210,6 +236,7 @@ body {
     padding: 16px;
     border-top: 1px solid #d2d2d7;
     background: white;
+    flex-shrink: 0;
 }
 
 #messageInput {
@@ -882,33 +909,13 @@ body {
     color: #1d1d1f;
 }
 
-/* 音声設定 / Voice Settings */
-.voice-settings {
-    padding: 12px 16px;
-    border-top: 1px solid #d2d2d7;
-    background: white;
-}
-
-.voice-setting-label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* 継続音声入力チェックボックス（入力エリア内） */
+.continuous-voice-checkbox {
     cursor: pointer;
-    user-select: none;
-    font-size: 14px;
-    color: #1d1d1f;
-    transition: color 0.2s ease;
-}
-
-.voice-setting-label:hover {
-    color: #007AFF;
-}
-
-.voice-setting-label input[type="checkbox"] {
-    cursor: pointer;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     accent-color: #007AFF;
+    flex-shrink: 0;
 }
 
 /* キャラクター画像スタイル（VOICEVOX対応） */
@@ -920,13 +927,13 @@ body {
 }
 
 .avatar-placeholder {
-    overflow: visible;
+    overflow: hidden;
     background: transparent;
 }
 
 .avatar-placeholder .character-image {
-    max-width: 200px;
-    max-height: 200px;
+    max-width: 72px;
+    max-height: 72px;
     width: auto;
     height: auto;
 }
