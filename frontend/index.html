@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interview System - 音声対話型プロファイリング</title>
+    <title>Interview System for Subscribe App - 音声対話型プロファイリング</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎤</text></svg>">
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -17,26 +17,31 @@
                 <div class="avatar-info">
                     <div class="app-title">
                         <span class="app-icon">🎤</span>
-                        <span class="app-name">Interview</span>
+                        <span class="app-name">Interview System</span>
+                        <span class="app-subtitle">for Subscribe App</span>
                     </div>
-                    <div class="avatar-placeholder">
-                        <span id="avatarEmoji">👤</span>
-                    </div>
-                    <p class="character-name" id="characterNameDisplay">-</p>
-                    <div class="status-info">
-                        <div class="lm-status" id="lmStatus">
-                            <span id="lmStatusText">確認中...</span>
+                    <div class="avatar-main">
+                        <div class="avatar-placeholder">
+                            <span id="avatarEmoji">👤</span>
                         </div>
-                        <div class="model-name" id="modelName">-</div>
-                    </div>
-                    <div class="version-info" id="versionInfo">
-                        <div class="version-item">
-                            <span class="version-label">Backend:</span>
-                            <span class="version-value" id="backendVersion">-</span>
-                        </div>
-                        <div class="version-item">
-                            <span class="version-label">Frontend:</span>
-                            <span class="version-value" id="frontendVersion">5.0</span>
+                        <div class="avatar-details">
+                            <p class="character-name" id="characterNameDisplay">-</p>
+                            <div class="status-info">
+                                <div class="lm-status" id="lmStatus">
+                                    <span id="lmStatusText">確認中...</span>
+                                </div>
+                                <div class="model-name" id="modelName">-</div>
+                            </div>
+                            <div class="version-info" id="versionInfo">
+                                <div class="version-item">
+                                    <span class="version-label">Backend:</span>
+                                    <span class="version-value" id="backendVersion">-</span>
+                                </div>
+                                <div class="version-item">
+                                    <span class="version-label">Frontend:</span>
+                                    <span class="version-value" id="frontendVersion">5.0-sub</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -51,6 +56,12 @@
             <div class="input-area">
                 <button id="micButton" class="mic-button" title="音声入力を開始">🎙️</button>
                 <input
+                    type="checkbox"
+                    id="continuousVoiceMode"
+                    class="continuous-voice-checkbox"
+                    title="継続音声入力モード（ボタンを押すまで録音継続）"
+                />
+                <input
                     type="text"
                     id="messageInput"
                     placeholder="メッセージを入力..."
@@ -59,14 +70,6 @@
                 <button id="sendButton" disabled>送信</button>
                 <button id="undoButton" class="undo-button" title="最後のやりとりを取り消す" disabled>↩️</button>
                 <span id="speakerIcon" class="speaker-icon" title="音声出力">🔇</span>
-            </div>
-
-            <!-- 音声設定 -->
-            <div class="voice-settings">
-                <label class="voice-setting-label">
-                    <input type="checkbox" id="continuousVoiceMode" />
-                    <span>🎤 継続音声入力モード（ボタンを押すまで録音継続）</span>
-                </label>
             </div>
         </div>
 
