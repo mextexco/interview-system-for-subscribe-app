@@ -50,6 +50,14 @@ BASIC_FIELD_KEYWORDS = {
 }
 
 
+class LLMAPIError(Exception):
+    """LLM API呼び出し失敗時の例外"""
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        self.message = message
+        super().__init__(f"[{status_code}] {message}")
+
+
 class Interviewer:
     """インタビューを管理するクラス"""
 
@@ -789,22 +797,19 @@ class Interviewer:
 
                 return final_message
             else:
-                log_lm.error(f"LM Studio error: {response.status_code}")
                 try:
-                    error_detail = response.json()
-                    log_lm.error(f"LM Studio error detail: {error_detail}")
-                except:
-                    log_lm.error(f"LM Studio error body: {response.text[:500]}")
+                    error_body = response.json()
+                    error_msg = error_body.get('error', {}).get('message', response.text[:300])
+                except Exception:
+                    error_msg = response.text[:300]
+                log_lm.error(f"LLM API error [{response.status_code}]: {error_msg}")
+                raise LLMAPIError(response.status_code, error_msg)
 
-                # システムプロンプトの長さをチェック
-                log_debug.debug(f"System prompt length: {len(system_prompt)} characters")
-                log_debug.debug(f"Total messages: {len(full_messages)}")
-
-                return None
-
+        except LLMAPIError:
+            raise
         except Exception as e:
             log_lm.error(f"Error getting response: {e}")
-            return None
+            raise LLMAPIError(0, str(e))
 
     def _count_consecutive_questions(self, session_data: Dict) -> Dict:
         """
