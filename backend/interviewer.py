@@ -8,7 +8,7 @@ import re
 import random
 from typing import Dict, List, Optional
 from config import (
-    LM_STUDIO_URL, LM_STUDIO_MODEL, CHARACTERS, CATEGORIES
+    LM_STUDIO_URL, LM_STUDIO_MODEL, LLM_API_KEY, CHARACTERS, CATEGORIES
 )
 from key_normalizer import KeyNormalizer
 from logger import get_logger
@@ -55,6 +55,7 @@ class Interviewer:
 
     def __init__(self):
         self.lm_studio_url = LM_STUDIO_URL
+        self._llm_headers = {"Authorization": f"Bearer {LLM_API_KEY}"} if LLM_API_KEY else {}
 
     def check_lm_studio_connection(self) -> bool:
         """LM Studioへの接続確認"""
@@ -67,6 +68,7 @@ class Interviewer:
                     "messages": [{"role": "user", "content": "test"}],
                     "max_tokens": 10
                 },
+                headers=self._llm_headers,
                 timeout=5
             )
             return response.status_code == 200
@@ -731,6 +733,7 @@ class Interviewer:
                     "temperature": 0.6,  # 事実性向上のため0.8→0.6に変更
                     "stream": False
                 },
+                headers=self._llm_headers,
                 timeout=30
             )
 
@@ -1197,6 +1200,7 @@ class Interviewer:
                     "temperature": 0.7,
                     "stream": False
                 },
+                headers=self._llm_headers,
                 timeout=30
             )
 
@@ -1359,6 +1363,7 @@ A:{user_message}"""
                         "temperature": 0.0,  # 0にして完全に決定論的に
                         "stream": False
                     },
+                    headers=self._llm_headers,
                     timeout=30
                 )
 

@@ -4,9 +4,10 @@
 
 import os
 
-# LM Studio設定
-LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions"
-LM_STUDIO_MODEL = "google/gemma-3-4b"
+# LM Studio / クラウドLLM設定
+LM_STUDIO_URL = os.getenv('LLM_API_URL', 'http://localhost:1234/v1/chat/completions')
+LM_STUDIO_MODEL = os.getenv('LLM_MODEL', 'google/gemma-3-4b')
+LLM_API_KEY = os.getenv('LLM_API_KEY', '')
 
 # データ保存先
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")

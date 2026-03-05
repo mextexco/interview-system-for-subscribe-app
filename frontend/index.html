@@ -52,7 +52,10 @@
                 <div class="progress-phases" id="progressPhases">
                     <!-- JS で動的生成 -->
                 </div>
-                <button class="finish-btn" id="finishBtn" title="ヒアリングをいつでも終了できます">終了する</button>
+                <div class="progress-actions">
+                    <button class="download-btn" id="downloadBtn" title="セッションデータを保存">💾 保存</button>
+                    <button class="finish-btn" id="finishBtn" title="ヒアリングをいつでも終了できます">終了する</button>
+                </div>
             </div>
 
             <!-- チャット領域 -->
@@ -215,7 +218,9 @@
     <!-- API_BASE_URL を最初に定義 -->
     <script>
         // API Base URL (全スクリプトで共有)
-        const API_BASE_URL = 'http://localhost:5001/api';
+        const API_BASE_URL = window.location.hostname === 'localhost'
+            ? 'http://localhost:5001/api'
+            : '/api';
     </script>
     <script src="js/voice.js"></script>
     <script src="js/visualizer.js"></script>
@@ -246,8 +251,9 @@
             // ステータスセクション折りたたみ
             setupStatusToggle();
 
-            // 終了ボタンのセットアップ
+            // 終了ボタン・ダウンロードボタンのセットアップ
             setupFinishButton();
+            setupDownloadButton();
 
             // プロファイルビジュアライザー初期化（少し遅延させてReactの読み込みを待つ）
             setTimeout(() => {

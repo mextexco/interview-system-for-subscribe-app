@@ -615,6 +615,18 @@ def chat():
     })
 
 
+@app.route('/api/session/<session_id>/export', methods=['GET'])
+def export_session(session_id):
+    """セッションデータをJSONファイルとしてダウンロード"""
+    session = profile_manager.get_session(session_id)
+    if not session:
+        return jsonify({'error': 'Session not found'}), 404
+    response = jsonify(session)
+    response.headers['Content-Disposition'] = \
+        f'attachment; filename="session_{session_id[:8]}.json"'
+    return response
+
+
 @app.route('/api/badges', methods=['GET'])
 def get_badges():
     """バッジ一覧を取得"""

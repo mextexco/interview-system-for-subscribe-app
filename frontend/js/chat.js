@@ -356,6 +356,29 @@ function updateProgressBar(phases) {
 }
 
 /**
+ * セッションデータをJSONファイルとしてダウンロード
+ */
+async function downloadSession() {
+    if (!currentSessionId) return;
+    const url = `${API_BASE_URL}/session/${currentSessionId}/export`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `session_${currentSessionId.slice(0, 8)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+/**
+ * ダウンロードボタンのセットアップ
+ */
+function setupDownloadButton() {
+    const btn = document.getElementById('downloadBtn');
+    if (!btn) return;
+    btn.addEventListener('click', downloadSession);
+}
+
+/**
  * 終了ボタンのセットアップ
  */
 function setupFinishButton() {
