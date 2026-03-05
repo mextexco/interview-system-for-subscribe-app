@@ -7,6 +7,10 @@ let currentUserId = null;
 let currentSessionId = null;
 let currentProfile = null;
 let messageCount = 0;
+let currentCourse = null;
+let selectedGender = null;
+let selectedCourseIds = [];   // 複数選択対応
+let allCoursesData = {};      // /api/courses の結果をキャッシュ
 // API_BASE_URL は visualizer.js で定義されている
 
 /**
@@ -68,24 +72,123 @@ async function fetchVersionInfo() {
 /**
  * スタートモーダルを表示
  */
-function showStartModal() {
+async function showStartModal() {
     const modal = document.getElementById('startModal');
     modal.classList.remove('hidden');
 
-    // 性別ボタンにイベントリスナー
+    // ステップ1: キャラクター選択（選択状態をビジュアル表示）
     const genderButtons = document.querySelectorAll('.gender-btn');
     genderButtons.forEach(btn => {
         btn.addEventListener('click', () => {
-            const gender = btn.dataset.gender;
-            startInterview(gender);
+            // 選択状態を切り替え
+            genderButtons.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedGender = btn.dataset.gender;
+            // 少し間を置いてから次ステップへ
+            setTimeout(() => showCourseStep(), 200);
         });
     });
+
+    // 開始ボタン
+    document.getElementById('startInterviewBtn').addEventListener('click', () => {
+        if (selectedCourseIds.length === 0) return;
+        startInterview(selectedGender, selectedCourseIds);
+    });
+
+    // コース一覧を読み込んでカードを生成
+    await loadCoursesIntoGrid();
+}
+
+/**
+ * コース選択ステップを表示
+ */
+function showCourseStep() {
+    document.getElementById('stepCharacter').classList.add('hidden');
+    document.getElementById('stepCourse').classList.remove('hidden');
+}
+
+/**
+ * コース一覧をAPIから取得してグリッドに描画（複数選択対応）
+ */
+async function loadCoursesIntoGrid() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/courses`);
+        allCoursesData = await response.json();
+        const grid = document.getElementById('courseGrid');
+        grid.innerHTML = '';
+        selectedCourseIds = [];
+
+        const courseOrder = [
+            'basic_info', 'health_wellness', 'entertainment_deep', 'travel_explorer',
+            'subscription_audit', 'daily_pain', 'spending_behavior', 'career_growth',
+            'daily_rhythm', 'learning_curiosity'
+        ];
+
+        courseOrder.forEach(courseId => {
+            const course = allCoursesData[courseId];
+            if (!course) return;
+            const card = document.createElement('div');
+            card.className = 'course-card';
+            card.dataset.courseId = courseId;
+            card.innerHTML = `
+                <div class="course-card-check">✓</div>
+                <div class="course-icon">${course.icon}</div>
+                <div class="course-info">
+                    <div class="course-name">${course.name}</div>
+                    <div class="course-catchcopy">${course.catchcopy}</div>
+                    <div class="course-meta">
+                        <span class="course-cats">${course.target_categories.join(' · ')}</span>
+                        <span class="course-time-badge">${course.estimated_time}</span>
+                    </div>
+                </div>
+            `;
+            card.addEventListener('click', () => toggleCourseSelection(courseId, card));
+            grid.appendChild(card);
+        });
+    } catch (error) {
+        console.error('[LoadCourses] Error:', error);
+    }
+}
+
+/**
+ * コースの選択状態をトグル
+ */
+function toggleCourseSelection(courseId, card) {
+    const idx = selectedCourseIds.indexOf(courseId);
+    if (idx === -1) {
+        selectedCourseIds.push(courseId);
+        card.classList.add('selected');
+    } else {
+        selectedCourseIds.splice(idx, 1);
+        card.classList.remove('selected');
+    }
+    updateCourseStartBar();
+}
+
+/**
+ * 開始バーの状態を更新
+ */
+function updateCourseStartBar() {
+    const btn = document.getElementById('startInterviewBtn');
+    const label = document.getElementById('selectedCountLabel');
+    if (selectedCourseIds.length === 0) {
+        label.textContent = 'コースを選んでください';
+        btn.disabled = true;
+    } else {
+        const names = selectedCourseIds.map(id => allCoursesData[id]?.name || id);
+        label.textContent = `選択中: ${names.join(' + ')}`;
+        btn.disabled = false;
+    }
 }
 
 /**
  * インタビュー開始
  */
-async function startInterview(gender) {
+async function startInterview(gender, courseIds = ['basic_info']) {
+    // courseIds は配列
+    if (!Array.isArray(courseIds)) courseIds = [courseIds];
+    // マージ後のコース情報をUIに使う（最初のコースを代表として使用）
+    currentCourse = allCoursesData[courseIds[0]] || null;
     try {
         // ユーザー作成
         const createResponse = await fetch(`${API_BASE_URL}/user/create`, {
@@ -115,7 +218,7 @@ async function startInterview(gender) {
         const sessionResponse = await fetch(`${API_BASE_URL}/session/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: currentUserId })
+            body: JSON.stringify({ user_id: currentUserId, course_ids: courseIds })
         });
 
         if (!sessionResponse.ok) {
@@ -142,6 +245,10 @@ async function startInterview(gender) {
 
         // モーダルを閉じる
         document.getElementById('startModal').classList.add('hidden');
+
+        // 進捗バーエリアを表示（コース開始時）
+        const progressBarArea = document.getElementById('progressBarArea');
+        if (progressBarArea) progressBarArea.classList.remove('hidden');
 
         // モーダルを閉じた後、少し遅延してメッセージを表示・読み上げ
         setTimeout(() => {
@@ -218,6 +325,72 @@ function setupUndoButton() {
     if (undoButton) {
         undoButton.addEventListener('click', undoLastTurn);
     }
+}
+
+/**
+ * 進捗バーを更新
+ * @param {Array} phases - [{label, icon, current, total}, ...]
+ */
+function updateProgressBar(phases) {
+    const area = document.getElementById('progressBarArea');
+    const container = document.getElementById('progressPhases');
+    if (!area || !container || !phases) return;
+
+    area.classList.remove('hidden');
+    container.innerHTML = '';
+
+    phases.forEach(phase => {
+        const pct = phase.total > 0 ? Math.min((phase.current / phase.total) * 100, 100) : 0;
+        const done = phase.current >= phase.total;
+        const el = document.createElement('div');
+        el.className = 'progress-phase' + (done ? ' done' : '');
+        el.innerHTML = `
+            <span class="progress-phase-label">${phase.icon} ${phase.label}</span>
+            <div class="progress-track">
+                <div class="progress-fill" style="width:${pct}%"></div>
+            </div>
+            <span class="progress-count">${phase.current}/${phase.total}</span>
+        `;
+        container.appendChild(el);
+    });
+}
+
+/**
+ * 終了ボタンのセットアップ
+ */
+function setupFinishButton() {
+    const btn = document.getElementById('finishBtn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+        if (!currentSessionId) return;
+        if (!confirm('ヒアリングを終了しますか？')) return;
+        btn.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE_URL}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    message: '終了します',
+                    force_finish: true
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                displayMessage('user', '終了します');
+                displayMessage('assistant', data.response, data.expression);
+                if (typeof speakText === 'function') speakText(data.response, currentProfile?.character);
+                // 入力を無効化
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendButton').disabled = true;
+                document.getElementById('micButton').disabled = true;
+                btn.textContent = '終了済み';
+            }
+        } catch (e) {
+            console.error('[FinishBtn] Error:', e);
+            btn.disabled = false;
+        }
+    });
 }
 
 /**
@@ -380,6 +553,18 @@ async function sendMessage() {
             }
         }
 
+        // 全問完了: 入力を無効化して終了状態にする
+        if (data.force_finished) {
+            document.getElementById('messageInput').disabled = true;
+            document.getElementById('sendButton').disabled = true;
+            const micBtn = document.getElementById('micButton');
+            if (micBtn) micBtn.disabled = true;
+            const finishBtn = document.getElementById('finishInterviewBtn');
+            if (finishBtn) { finishBtn.disabled = true; finishBtn.textContent = '終了済み'; }
+            if (data.progress) updateProgressBar(data.progress);
+            return;
+        }
+
         // 🚀 バックグラウンドデータ抽出の完了を待って自動更新
         // 戦略: 2秒 → +3秒(合計5秒) → +3秒(合計8秒)
 
@@ -389,6 +574,11 @@ async function sendMessage() {
             updateStatusDisplay(currentProfile, currentSessionId);
         } else {
             console.warn('[Chat] updateStatusDisplay not available yet');
+        }
+
+        // 進捗バー更新
+        if (data.progress) {
+            updateProgressBar(data.progress);
         }
 
         // 取り消しボタンを有効化
@@ -553,12 +743,7 @@ async function undoLastTurn() {
 
     // 最初のメッセージしかない場合は取り消せない
     if (messages.length <= 1) {
-        alert('取り消せるメッセージがありません');
-        return;
-    }
-
-    // 確認ダイアログ
-    if (!confirm('最後のやりとりを取り消しますか？\n（抽出されたデータも削除されます）')) {
+        displaySystemMessage('取り消せるメッセージがありません');
         return;
     }
 
@@ -603,8 +788,8 @@ async function undoLastTurn() {
             console.warn('[Chat] updateStatusDisplay not available yet');
         }
 
-        // 通知
-        alert(`取り消しました（${data.removed_data_count}件のデータを削除）`);
+        // チャット欄に削除完了メッセージを表示
+        displaySystemMessage('最後のやりとりを削除しました');
 
     } catch (error) {
         console.error('[Undo] Error:', error);
@@ -657,6 +842,18 @@ function displayErrorMessage(errorMessage) {
     chatContainer.appendChild(messageDiv);
 
     // スクロール
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+/**
+ * システム通知メッセージをチャット欄に表示（グレー・中央）
+ */
+function displaySystemMessage(message) {
+    const chatContainer = document.getElementById('chatContainer');
+    const div = document.createElement('div');
+    div.className = 'message system-notice';
+    div.textContent = message;
+    chatContainer.appendChild(div);
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 

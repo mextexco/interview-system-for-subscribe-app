@@ -9,6 +9,8 @@ let hasReceivedResult = false;  // 結果を受信したかどうか
 let recognitionTimeout = null;  // タイムアウト管理用
 let restartCount = 0;  // 再起動回数
 const MAX_RESTARTS = 3;  // 最大再起動回数
+let autoSendTimer = null;  // 自動送信タイマー（発話終了後のバッファ）
+const AUTO_SEND_DELAY_MS = 2000;  // 発話終了から送信までの待機時間（ms）
 
 // 音声合成の設定
 const synth = window.speechSynthesis;
@@ -18,6 +20,7 @@ let currentVoice = null;
 const VOICEVOX_URL = 'http://localhost:50021';
 let voicevoxAvailable = false;
 let currentAudio = null;  // 現在再生中の音声
+let isSpeaking = false;   // TTS再生中フラグ（マイク無効化制御用）
 
 /**
  * VOICEVOX接続チェック
@@ -107,8 +110,15 @@ function initSpeechRecognition() {
             // 継続モードがOFFの場合のみ自動送信
             // 継続モードがONの場合は、ユーザーがマイクボタンを押して停止するまで待つ
             if (!isContinuousMode) {
-                // 自動送信
-                sendMessage();
+                // 発話終了後 AUTO_SEND_DELAY_MS 待ってから送信（追加発話があればタイマーリセット）
+                if (autoSendTimer) clearTimeout(autoSendTimer);
+                autoSendTimer = setTimeout(() => {
+                    autoSendTimer = null;
+                    if (messageInput.value.trim()) {
+                        sendMessage();
+                    }
+                }, AUTO_SEND_DELAY_MS);
+                console.log(`[Voice] Auto-send scheduled in ${AUTO_SEND_DELAY_MS}ms`);
             } else {
                 console.log('[Voice] Continuous mode: text updated, waiting for manual stop');
             }
@@ -245,6 +255,12 @@ async function startRecording() {
         }
     }
 
+    // TTS再生中はマイクを起動しない
+    if (isSpeaking) {
+        console.log('[Voice] Blocked: TTS is still speaking');
+        return;
+    }
+
     if (isRecording) {
         stopRecording();
         return;
@@ -297,6 +313,12 @@ function stopRecording() {
         if (recognitionTimeout) {
             clearTimeout(recognitionTimeout);
             recognitionTimeout = null;
+        }
+
+        // 自動送信タイマーをクリア（手動停止時はすぐに送信しない）
+        if (autoSendTimer) {
+            clearTimeout(autoSendTimer);
+            autoSendTimer = null;
         }
 
         recognition.stop();
@@ -423,26 +445,32 @@ function speakWithWebSpeechAPI(text, characterId) {
     // 読み上げ開始・終了イベント
     utterance.onstart = () => {
         console.log('[Voice] Speech started');
+        isSpeaking = true;
         updateSpeakerIcon(true);
+        setMicButtonDisabled(true);
         // 音声読み上げ中は音声認識を停止（AIの音声を拾わないため）
         if (isRecording) {
             recognition.stop();
             isRecording = false;
-            updateMicButton(false);  // UIも更新
+            updateMicButton(false);
             console.log('[Voice] Recognition paused during speech');
         }
     };
 
     utterance.onend = () => {
         console.log('[Voice] Speech ended');
+        isSpeaking = false;
         updateSpeakerIcon(false);
-        // 音声読み上げが終わったら自動的に音声認識を再開しない
-        // ユーザーが明示的にマイクボタンを押す必要がある
+        setMicButtonDisabled(false);
+        if (!isRecording) startRecording();
     };
 
     utterance.onerror = (event) => {
         console.error('[Voice] Speech error:', event.error);
+        isSpeaking = false;
         updateSpeakerIcon(false);
+        setMicButtonDisabled(false);
+        if (!isRecording) startRecording();
     };
 
     synth.speak(utterance);
@@ -543,7 +571,9 @@ async function speakWithVoicevox(text, characterId) {
 
         currentAudio.onplay = () => {
             console.log('[VOICEVOX] Playback started');
+            isSpeaking = true;
             updateSpeakerIcon(true);
+            setMicButtonDisabled(true);
             // 音声再生中は音声認識を停止
             if (isRecording) {
                 recognition.stop();
@@ -555,16 +585,22 @@ async function speakWithVoicevox(text, characterId) {
 
         currentAudio.onended = () => {
             console.log('[VOICEVOX] Playback ended');
+            isSpeaking = false;
             updateSpeakerIcon(false);
+            setMicButtonDisabled(false);
             URL.revokeObjectURL(audioUrl);
             currentAudio = null;
+            if (!isRecording) startRecording();
         };
 
         currentAudio.onerror = (error) => {
             console.error('[VOICEVOX] Playback error:', error);
+            isSpeaking = false;
             updateSpeakerIcon(false);
+            setMicButtonDisabled(false);
             URL.revokeObjectURL(audioUrl);
             currentAudio = null;
+            if (!isRecording) startRecording();
         };
 
         await currentAudio.play();
@@ -607,7 +643,25 @@ function stopSpeaking() {
         synth.cancel();
     }
 
+    isSpeaking = false;
     updateSpeakerIcon(false);
+    setMicButtonDisabled(false);
+}
+
+/**
+ * マイクボタンのdisabled状態を設定（TTS再生中の誤録音防止）
+ */
+function setMicButtonDisabled(disabled) {
+    const micButton = document.getElementById('micButton');
+    if (!micButton) return;
+    micButton.disabled = disabled;
+    if (disabled) {
+        micButton.style.opacity = '0.4';
+        micButton.title = '音声再生中...';
+    } else {
+        micButton.style.opacity = '';
+        micButton.title = isRecording ? '録音中...（クリックで停止）' : '音声入力を開始';
+    }
 }
 
 /**
@@ -662,6 +716,12 @@ function setupSpacebarControl() {
 
             // デフォルトのスペース動作（スクロール）を防ぐ
             event.preventDefault();
+
+            // TTS再生中はスペースキーでもマイク起動しない
+            if (isSpeaking) {
+                console.log('[Voice] Spacebar blocked: TTS is speaking');
+                return;
+            }
 
             // マイクをトグル
             console.log('[Voice] Spacebar pressed - toggling microphone');

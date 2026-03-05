@@ -15,7 +15,7 @@
             <!-- キャラクターアバター -->
             <div class="character-avatar" id="characterAvatar">
                 <div class="avatar-info">
-                    <div class="app-title">
+                    <div class="app-title" onclick="location.reload()" style="cursor:pointer;" title="トップへ戻る">
                         <span class="app-icon">🎤</span>
                         <span class="app-name">Interview System</span>
                         <span class="app-subtitle">for Subscribe App</span>
@@ -47,6 +47,14 @@
                 </div>
             </div>
 
+            <!-- 進捗バー -->
+            <div class="progress-bar-area hidden" id="progressBarArea">
+                <div class="progress-phases" id="progressPhases">
+                    <!-- JS で動的生成 -->
+                </div>
+                <button class="finish-btn" id="finishBtn" title="ヒアリングをいつでも終了できます">終了する</button>
+            </div>
+
             <!-- チャット領域 -->
             <div class="chat-container" id="chatContainer">
                 <!-- メッセージはJavaScriptで動的に追加 -->
@@ -60,6 +68,7 @@
                     id="continuousVoiceMode"
                     class="continuous-voice-checkbox"
                     title="継続音声入力モード（ボタンを押すまで録音継続）"
+                    checked
                 />
                 <input
                     type="text"
@@ -122,21 +131,45 @@
     <!-- スタート画面（モーダル） -->
     <div class="modal" id="startModal">
         <div class="modal-content">
-            <h2>面接を始めます</h2>
-            <p>担当キャラクターを選んでください</p>
-            <div class="gender-buttons">
-                <button class="gender-btn" data-gender="男性">
-                    <span class="char-name">青山くん</span>
-                    <span class="char-desc">落ち着いた男性</span>
-                </button>
-                <button class="gender-btn" data-gender="女性">
-                    <span class="char-name">つむぎちゃん</span>
-                    <span class="char-desc">明るい女性</span>
-                </button>
-                <button class="gender-btn" data-gender="その他">
-                    <span class="char-name">ずんだもん</span>
-                    <span class="char-desc">親しみやすい</span>
-                </button>
+            <!-- ステップ1: キャラクター選択 -->
+            <div id="stepCharacter">
+                <h2>ヒアリングを始めます</h2>
+                <p>担当キャラクターを選んでください</p>
+                <div class="gender-buttons">
+                    <button class="gender-btn" data-gender="男性">
+                        <span class="char-avatar">👨</span>
+                        <span class="char-name">青山くん</span>
+                        <span class="char-desc">落ち着いた男性</span>
+                        <span class="char-check">✓</span>
+                    </button>
+                    <button class="gender-btn" data-gender="女性">
+                        <span class="char-avatar">👩</span>
+                        <span class="char-name">つむぎちゃん</span>
+                        <span class="char-desc">明るい女性</span>
+                        <span class="char-check">✓</span>
+                    </button>
+                    <button class="gender-btn" data-gender="その他">
+                        <span class="char-avatar">🌱</span>
+                        <span class="char-name">ずんだもん</span>
+                        <span class="char-desc">親しみやすい</span>
+                        <span class="char-check">✓</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ステップ2: コース選択 -->
+            <div id="stepCourse" class="hidden">
+                <div class="step-header">
+                    <h2>コースを選んでください</h2>
+                </div>
+                <p class="step-sub">複数選択できます。選んだら「開始」を押してください</p>
+                <div class="course-grid" id="courseGrid">
+                    <!-- コースカードはJSで動的生成 -->
+                </div>
+                <div class="course-start-bar">
+                    <span class="selected-count-label" id="selectedCountLabel">コースを選んでください</span>
+                    <button class="start-interview-btn" id="startInterviewBtn" disabled>ヒアリング開始</button>
+                </div>
             </div>
         </div>
     </div>
@@ -212,6 +245,9 @@
 
             // ステータスセクション折りたたみ
             setupStatusToggle();
+
+            // 終了ボタンのセットアップ
+            setupFinishButton();
 
             // プロファイルビジュアライザー初期化（少し遅延させてReactの読み込みを待つ）
             setTimeout(() => {
