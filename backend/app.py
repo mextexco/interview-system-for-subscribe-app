@@ -26,6 +26,7 @@ log_correction = get_logger('Correction')
 log_undo = get_logger('Undo')
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
+app.config['JSON_ENSURE_ASCII'] = False  # 日本語をそのまま出力
 CORS(app)
 
 # マネージャーインスタンス
@@ -677,13 +678,86 @@ def text_to_speech():
 @app.route('/api/session/<session_id>/export', methods=['GET'])
 def export_session(session_id):
     """セッションデータをJSONファイルとしてダウンロード"""
+    import json as json_mod
+    from flask import Response
     session = profile_manager.get_session(session_id)
     if not session:
         return jsonify({'error': 'Session not found'}), 404
-    response = jsonify(session)
-    response.headers['Content-Disposition'] = \
-        f'attachment; filename="session_{session_id[:8]}.json"'
-    return response
+    json_str = json_mod.dumps(session, ensure_ascii=False, indent=2)
+    return Response(
+        json_str,
+        mimetype='application/json',
+        headers={'Content-Disposition': f'attachment; filename="session_{session_id[:8]}.json"'}
+    )
+
+
+@app.route('/api/session/<session_id>/report', methods=['GET'])
+def export_session_report(session_id):
+    """セッションデータを人間が読みやすいMarkdownとしてダウンロード"""
+    from flask import Response
+    session = profile_manager.get_session(session_id)
+    if not session:
+        return jsonify({'error': 'Session not found'}), 404
+
+    lines = []
+    date_str = session.get('date', '')[:10]
+    course_name = session.get('course', {}).get('name', '不明')
+    short_id = session_id[:8]
+
+    lines.append(f'# ヒアリングレポート')
+    lines.append(f'')
+    lines.append(f'- **セッションID**: {short_id}')
+    lines.append(f'- **日付**: {date_str}')
+    lines.append(f'- **コース**: {course_name}')
+    lines.append(f'')
+
+    # 基本プロフィール
+    basic = session.get('extracted_data', {}).get('基本プロフィール', [])
+    if basic:
+        lines.append('## 基本プロフィール')
+        lines.append('')
+        for item in basic:
+            lines.append(f'- **{item.get("key", "")}**: {item.get("value", "")}')
+        lines.append('')
+
+    # 抽出データ（基本プロフィール以外）
+    extracted = session.get('extracted_data', {})
+    has_data = False
+    for cat, items in extracted.items():
+        if cat == '基本プロフィール' or not items:
+            continue
+        if not has_data:
+            lines.append('## 抽出プロファイルデータ')
+            lines.append('')
+            has_data = True
+        lines.append(f'### {cat}')
+        lines.append('')
+        for item in items:
+            parts = [item.get('key', '')]
+            sub1 = item.get('subcategory1')
+            sub2 = item.get('subcategory2')
+            path = ' / '.join(filter(None, [sub1, sub2, item.get('key', '')]))
+            lines.append(f'- **{path}**: {item.get("value", "")}')
+        lines.append('')
+
+    # 会話履歴
+    conversation = session.get('conversation', [])
+    if conversation:
+        lines.append('## 会話履歴')
+        lines.append('')
+        for msg in conversation:
+            role = msg.get('role', '')
+            content = msg.get('content', '')
+            label = 'ユーザー' if role == 'user' else 'AI'
+            lines.append(f'**{label}**: {content}')
+            lines.append('')
+
+    md_text = '\n'.join(lines)
+    return Response(
+        md_text,
+        mimetype='text/markdown; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="report_{short_id}.md"'}
+    )
 
 
 @app.route('/api/badges', methods=['GET'])

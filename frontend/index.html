@@ -53,7 +53,13 @@
                     <!-- JS で動的生成 -->
                 </div>
                 <div class="progress-actions">
-                    <button class="download-btn" id="downloadBtn" title="セッションデータを保存">💾 保存</button>
+                    <div class="download-menu-wrap" id="downloadMenuWrap">
+                        <button class="download-btn" id="downloadBtn" title="保存形式を選択">💾 保存 ▾</button>
+                        <div class="download-menu hidden" id="downloadMenu">
+                            <button class="download-menu-item" id="downloadJsonBtn">📄 JSON（データ）</button>
+                            <button class="download-menu-item" id="downloadReportBtn">📝 レポート（MD）</button>
+                        </div>
+                    </div>
                     <button class="finish-btn" id="finishBtn" title="ヒアリングをいつでも終了できます">終了する</button>
                 </div>
             </div>

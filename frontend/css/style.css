@@ -1241,6 +1241,11 @@ body {
 }
 
 /* ダウンロードボタン */
+.download-menu-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
 .download-btn {
     padding: 4px 10px;
     font-size: 11px;
@@ -1251,13 +1256,48 @@ body {
     color: #555;
     white-space: nowrap;
     transition: all 0.15s;
-    flex-shrink: 0;
 }
 
 .download-btn:hover {
     background: #34c759;
     border-color: #34c759;
     color: #fff;
+}
+
+.download-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    background: white;
+    border: 1px solid #d1d1d6;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    overflow: hidden;
+    z-index: 100;
+    min-width: 160px;
+}
+
+.download-menu.hidden {
+    display: none;
+}
+
+.download-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 14px;
+    font-size: 12px;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #333;
+    white-space: nowrap;
+    transition: background 0.1s;
+}
+
+.download-menu-item:hover {
+    background: #f0f6ff;
+    color: #007AFF;
 }
 
 /* 終了ボタン */
