@@ -387,7 +387,7 @@ function showVoiceError(message) {
 }
 
 /**
- * テキストを音声で読み上げ（VOICEVOX優先、フォールバックでWeb Speech API）
+ * テキストを音声で読み上げ（VOICEVOX → Google TTS → Web Speech API の順で試みる）
  */
 async function speakText(text, characterId = 'aoi') {
     // 絵文字を除去
@@ -399,19 +399,99 @@ async function speakText(text, characterId = 'aoi') {
         return;
     }
 
-    // VOICEVOXが利用可能な場合はVOICEVOXを使用
+    // 1. VOICEVOXが利用可能な場合はVOICEVOXを使用（ローカル環境）
     if (voicevoxAvailable) {
         console.log('[Voice] Using VOICEVOX for synthesis');
         const success = await speakWithVoicevox(cleanedText, characterId);
-        if (success) {
-            return;
-        }
-        console.log('[Voice] VOICEVOX failed, falling back to Web Speech API');
+        if (success) return;
+        console.log('[Voice] VOICEVOX failed, falling back to Google TTS');
     }
 
-    // フォールバック: Web Speech API
-    console.log('[Voice] Using Web Speech API');
+    // 2. Google TTS（クラウド環境）
+    console.log('[Voice] Trying Google TTS');
+    const googleOk = await speakWithGoogleTTS(cleanedText, characterId);
+    if (googleOk) return;
+
+    // 3. フォールバック: Web Speech API
+    console.log('[Voice] Using Web Speech API as final fallback');
     speakWithWebSpeechAPI(cleanedText, characterId);
+}
+
+/**
+ * Google Cloud TTSで音声合成（バックエンドプロキシ経由）
+ */
+async function speakWithGoogleTTS(text, characterId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, character: characterId })
+        });
+
+        if (!response.ok) {
+            console.log(`[GoogleTTS] Endpoint returned ${response.status}, skipping`);
+            return false;
+        }
+
+        const data = await response.json();
+        if (!data.audioContent) return false;
+
+        // base64 → Blob → Audio
+        const audioBytes = atob(data.audioContent);
+        const buffer = new ArrayBuffer(audioBytes.length);
+        const view = new Uint8Array(buffer);
+        for (let i = 0; i < audioBytes.length; i++) {
+            view[i] = audioBytes.charCodeAt(i);
+        }
+        const audioBlob = new Blob([buffer], { type: 'audio/mp3' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+        }
+
+        currentAudio = new Audio(audioUrl);
+
+        currentAudio.onplay = () => {
+            console.log('[GoogleTTS] Playback started');
+            isSpeaking = true;
+            updateSpeakerIcon(true);
+            setMicButtonDisabled(true);
+            if (isRecording) {
+                recognition.stop();
+                isRecording = false;
+                updateMicButton(false);
+            }
+        };
+
+        currentAudio.onended = () => {
+            console.log('[GoogleTTS] Playback ended');
+            isSpeaking = false;
+            updateSpeakerIcon(false);
+            setMicButtonDisabled(false);
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+            if (!isRecording) startRecording();
+        };
+
+        currentAudio.onerror = (e) => {
+            console.error('[GoogleTTS] Playback error:', e);
+            isSpeaking = false;
+            updateSpeakerIcon(false);
+            setMicButtonDisabled(false);
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+            if (!isRecording) startRecording();
+        };
+
+        await currentAudio.play();
+        return true;
+
+    } catch (error) {
+        console.error('[GoogleTTS] Failed:', error);
+        return false;
+    }
 }
 
 /**
