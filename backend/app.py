@@ -617,54 +617,8 @@ def chat():
 
 @app.route('/api/tts', methods=['POST'])
 def text_to_speech():
-    """edge-tts による音声合成（無料・APIキー不要）"""
-    import asyncio
-    import base64
-    import edge_tts
-
-    data = request.json
-    text = data.get('text', '')
-    character = data.get('character', 'aoi')
-
-    if not text:
-        return jsonify({'error': 'text required'}), 400
-
-    # キャラクター別音声（Microsoft Edge Neural 音声）
-    voice_map = {
-        'misaki': {'voice': 'ja-JP-NanamiNeural', 'rate': '+20%'},
-        'kenta':  {'voice': 'ja-JP-KeitaNeural',  'rate': '+30%'},
-        'aoi':    {'voice': 'ja-JP-NanamiNeural', 'rate': '+20%'},
-    }
-    v = voice_map.get(character, voice_map['aoi'])
-
-    async def _synth():
-        communicate = edge_tts.Communicate(text, v['voice'], rate=v['rate'])
-        audio_data = b''
-        async for chunk in communicate.stream():
-            if chunk['type'] == 'audio':
-                audio_data += chunk['data']
-        return audio_data
-
-    def _run_in_thread():
-        """gunicornとasyncioの競合を避けるため専用スレッドで実行"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_synth())
-        finally:
-            loop.close()
-
-    try:
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_run_in_thread)
-            audio_data = future.result(timeout=15)
-    except Exception as e:
-        log_api.error(f'edge-tts failed: {e}', exc_info=True)
-        return jsonify({'error': 'TTS failed', 'detail': str(e)}), 502
-
-    audio_b64 = base64.b64encode(audio_data).decode('utf-8')
-    return jsonify({'audioContent': audio_b64})
+    """TTS エンドポイント（現在は無効・フロントはWeb Speech APIを使う）"""
+    return jsonify({'error': 'TTS not available'}), 503
 
 
 @app.route('/api/session/<session_id>/export', methods=['GET'])
