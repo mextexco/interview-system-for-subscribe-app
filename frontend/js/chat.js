@@ -357,26 +357,55 @@ function updateProgressBar(phases) {
 }
 
 /**
- * セッションデータをJSONファイルとしてダウンロード
+ * ファイルをダウンロード
  */
-async function downloadSession() {
-    if (!currentSessionId) return;
-    const url = `${API_BASE_URL}/session/${currentSessionId}/export`;
+function _triggerDownload(url, filename) {
     const a = document.createElement('a');
     a.href = url;
-    a.download = `session_${currentSessionId.slice(0, 8)}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 }
 
 /**
- * ダウンロードボタンのセットアップ
+ * ダウンロードボタン（メニュー付き）のセットアップ
  */
 function setupDownloadButton() {
     const btn = document.getElementById('downloadBtn');
-    if (!btn) return;
-    btn.addEventListener('click', downloadSession);
+    const menu = document.getElementById('downloadMenu');
+    const jsonBtn = document.getElementById('downloadJsonBtn');
+    const reportBtn = document.getElementById('downloadReportBtn');
+    if (!btn || !menu) return;
+
+    // メニュー開閉
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.toggle('hidden');
+    });
+
+    // 外クリックで閉じる
+    document.addEventListener('click', () => menu.classList.add('hidden'));
+
+    // JSON ダウンロード
+    jsonBtn.addEventListener('click', () => {
+        if (!currentSessionId) return;
+        _triggerDownload(
+            `${API_BASE_URL}/session/${currentSessionId}/export`,
+            `session_${currentSessionId.slice(0, 8)}.json`
+        );
+        menu.classList.add('hidden');
+    });
+
+    // レポート（MD）ダウンロード
+    reportBtn.addEventListener('click', () => {
+        if (!currentSessionId) return;
+        _triggerDownload(
+            `${API_BASE_URL}/session/${currentSessionId}/report`,
+            `report_${currentSessionId.slice(0, 8)}.md`
+        );
+        menu.classList.add('hidden');
+    });
 }
 
 /**
