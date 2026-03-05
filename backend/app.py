@@ -617,8 +617,50 @@ def chat():
 
 @app.route('/api/tts', methods=['POST'])
 def text_to_speech():
-    """TTS エンドポイント（現在は無効・フロントはWeb Speech APIを使う）"""
-    return jsonify({'error': 'TTS not available'}), 503
+    """Google Cloud TTS プロキシ"""
+    import base64
+    import requests as req
+    from config import GOOGLE_TTS_API_KEY
+
+    if not GOOGLE_TTS_API_KEY:
+        return jsonify({'error': 'TTS not configured'}), 503
+
+    data = request.json
+    text = data.get('text', '')
+    character = data.get('character', 'aoi')
+
+    if not text:
+        return jsonify({'error': 'text required'}), 400
+
+    voice_map = {
+        'misaki': {'name': 'ja-JP-Wavenet-A', 'ssmlGender': 'FEMALE', 'rate': 1.2},
+        'kenta':  {'name': 'ja-JP-Wavenet-C', 'ssmlGender': 'MALE',   'rate': 1.4},
+        'aoi':    {'name': 'ja-JP-Wavenet-B', 'ssmlGender': 'FEMALE', 'rate': 1.2},
+    }
+    voice = voice_map.get(character, voice_map['aoi'])
+
+    payload = {
+        'input': {'text': text},
+        'voice': {'languageCode': 'ja-JP', 'name': voice['name'], 'ssmlGender': voice['ssmlGender']},
+        'audioConfig': {'audioEncoding': 'MP3', 'speakingRate': voice['rate']}
+    }
+
+    try:
+        resp = req.post(
+            f'https://texttospeech.googleapis.com/v1/text:synthesize?key={GOOGLE_TTS_API_KEY}',
+            json=payload,
+            timeout=10
+        )
+    except Exception as e:
+        log_api.error(f'Google TTS request failed: {e}')
+        return jsonify({'error': 'TTS request failed'}), 502
+
+    if resp.status_code != 200:
+        log_api.error(f'Google TTS error: {resp.status_code} {resp.text[:200]}')
+        return jsonify({'error': 'TTS failed'}), 502
+
+    audio_content = resp.json().get('audioContent', '')
+    return jsonify({'audioContent': audio_content})
 
 
 @app.route('/api/session/<session_id>/export', methods=['GET'])
