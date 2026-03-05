@@ -9,113 +9,108 @@
 
 ## 技術スタック
 
-- **Backend**: Python 3.10+, Flask
-- **LLM**: LM Studio (http://localhost:1234/v1/chat/completions)
-  - 推奨モデル: Qwen2.5:7b, Gemma2:9b
-- **Frontend**: HTML/CSS/JavaScript (バニラJS + React)
-- **Visualization**: ReactFlow (インタラクティブマインドマップ)
-- **音声**: VOICEVOX + Web Speech API
+| 役割 | ローカル環境 | クラウド環境 |
+|------|------------|------------|
+| **LLM** | LM Studio (localhost:1234) | Gemini API (gemini-2.0-flash-lite) |
+| **TTS** | VOICEVOX (localhost:50021) | Google Cloud TTS (Wavenet) |
+| **STT** | Web Speech API (ブラウザ標準) | Web Speech API (ブラウザ標準) |
+| **Backend** | Flask (port 5001) | gunicorn + Flask (port 8080) |
+| **Frontend** | バニラJS + React (ReactFlow) | 同左 |
+| **ホスティング** | - | Render.com |
 
-## セットアップ
+## ローカル開発セットアップ
 
 ### 必要要件
 
 - Python 3.10以上
-- Node.js 18以上 (プロファイルビジュアライザーのビルド用)
-- LM Studio (起動済み、ポート1234で待機)
-- VOICEVOX (音声合成用、オプション)
+- Node.js 18以上（Reactビルド用）
+- LM Studio（起動済み・ポート1234）
+- VOICEVOX（任意・音声合成用）
 
 ### インストール
 
 ```bash
-# Python依存パッケージのインストール
 pip install -r requirements.txt
-
-# Node.js依存パッケージのインストール
 npm install
-
-# Reactコンポーネントのビルド
 npm run build
-
-# Flaskサーバーの起動
 python backend/app.py
 ```
 
-### 使い方
+ブラウザで `http://localhost:5001` を開く。
 
-1. LM Studioを起動し、推奨モデル（Qwen2.5:7bまたはGemma2:9b）をロード
-2. ブラウザで `http://localhost:5000` を開く
-3. 性別を選択してインタビュー開始
-4. AIキャラクターとの会話を楽しみながらプロファイリングを進める
+## クラウドデプロイ（Render）
+
+### 環境変数（Renderダッシュボード > Environment）
+
+| 変数名 | 説明 | 取得先 |
+|--------|------|--------|
+| `LLM_API_URL` | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` | 固定値 |
+| `LLM_MODEL` | `gemini-2.0-flash-lite` | 固定値 |
+| `LLM_API_KEY` | Gemini APIキー | https://aistudio.google.com |
+| `GOOGLE_TTS_API_KEY` | Google Cloud TTS APIキー | https://console.cloud.google.com |
+
+`.env.example` を参照。
+
+### デプロイ手順
+
+1. Render.com でGitHubリポジトリを接続
+2. Runtime: `Docker` を選択
+3. 上記環境変数を設定
+4. Deploy
+
+### 注意事項
+
+- 無料プランは15分無アクセスでスリープ（初回アクセスに30秒〜1分かかる）
+- セッションデータはコンテナ再起動で消える（`💾 保存`ボタンでDL可能）
+- Google Cloud TTS: 月100万文字まで無料（要クレジットカード登録）
+- 未設定時はブラウザ標準のWeb Speech APIにフォールバック
 
 ## 機能
 
 ### プロファイルビジュアライゼーション
 
 - **インタラクティブマインドマップ**: ReactFlowによるリアルタイム可視化
-  - 円形レイアウトとウォーターフォールレイアウトの切り替え
-  - ノードの折りたたみ/展開機能
-  - 新規データの自動フォーカス&アニメーション
-  - カテゴリー → サブカテゴリー → 値の3階層表示
+- 円形レイアウト / ウォーターフォールレイアウト切り替え
+- ノードの折りたたみ/展開
+- カテゴリー → サブカテゴリー → 値の階層表示
 
-### ゲーミフィケーション要素
+### ヒアリングコース（9種類）
 
-- **バッジシステム**: 10種類の獲得可能バッジ
-- **ランダムイベント**: 会話を盛り上げるミニゲーム
-- **リアクション演出**: 3段階のビジュアルフィードバック
-
-### プロファイリングカテゴリー（10項目）
-
-1. 基本プロフィール
-2. ライフストーリー
-3. 現在の生活
-4. 健康・ライフスタイル
-5. 趣味・興味・娯楽
-6. 学習・成長
-7. 人間関係・コミュニティ
-8. 情報収集・メディア
-9. 経済・消費
-10. 価値観・将来
+基本情報のみ / 健康・ウェルネス / エンタメ・趣味 / 旅行・おでかけ /
+サブスク棚卸し / 日常のモヤモヤ発見 / 消費行動診断 / キャリア・仕事 /
+一日のリズム / 学習・知的好奇心
 
 ### キャラクター
 
-- **美咲**: 女性、20代後半、明るく聞き上手（男性ユーザー向け）
-- **健太**: 男性、30代前半、落ち着いて知的（女性ユーザー向け）
-- **あおい**: 中性的（その他のユーザー向け）
-
-各キャラクター6種類の表情差分あり
+- **つむぎちゃん**: 女性・20代後半・明るく聞き上手
+- **青山くん**: 男性・30代前半・落ち着いて知的
+- **ずんだもん**: 中性的・親しみやすい
 
 ## ディレクトリ構成
 
 ```
 interview-system/
-├── backend/                 # Flaskバックエンド
-│   ├── app.py              # メインアプリケーション
+├── backend/
+│   ├── app.py              # Flask APIエンドポイント
 │   ├── interviewer.py      # LLMインタビューロジック
 │   ├── profile_manager.py  # プロファイル管理
+│   ├── config.py           # 設定（env var対応）
 │   └── ...
-├── frontend/               # フロントエンド
-│   ├── index.html         # メインHTML
-│   ├── css/               # スタイルシート
-│   ├── js/                # Vanilla JavaScript
-│   ├── react/             # Reactコンポーネント (ソース)
-│   │   ├── ProfileVisualizer.jsx
-│   │   └── main.jsx
-│   └── dist/              # Reactビルド出力
-│       └── assets/
-├── data/                   # ユーザーデータ保存先
-├── requirements.txt        # Python依存パッケージ
-├── package.json           # Node.js依存パッケージ
-├── vite.config.js         # Viteビルド設定
-└── README.md              # このファイル
+├── frontend/
+│   ├── index.html
+│   ├── css/
+│   ├── js/
+│   │   ├── chat.js
+│   │   ├── voice.js        # TTS/STT（VoiceVox→GoogleTTS→WebSpeech）
+│   │   └── ...
+│   └── dist/               # Reactビルド出力（要コミット）
+├── data/                   # セッション・プロファイルデータ（gitignore）
+├── Dockerfile
+├── requirements.txt
+├── .env.example
+└── README.md
 ```
 
 ## ライセンス
 
 MIT License
-
-## 開発
-
-- Python 3.10+
-- Flask開発サーバー使用
-- ローカル環境専用（セキュリティは最小限）
