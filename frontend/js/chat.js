@@ -24,8 +24,9 @@ async function checkLMStudioConnection() {
         const statusText = document.getElementById('lmStatusText');
         const modelName = document.getElementById('modelName');
 
+        const serviceName = data.llm_service || 'LM Studio';
         if (data.lm_studio === 'connected') {
-            statusText.textContent = 'LM Studio';
+            statusText.textContent = serviceName;
             statusText.classList.add('connected');
             statusText.classList.remove('disconnected');
 
@@ -34,7 +35,7 @@ async function checkLMStudioConnection() {
                 modelName.textContent = data.model;
             }
         } else {
-            statusText.textContent = 'LM Studio 未接続';
+            statusText.textContent = `${serviceName} 未接続`;
             statusText.classList.add('disconnected');
             statusText.classList.remove('connected');
             modelName.textContent = '';
@@ -42,7 +43,7 @@ async function checkLMStudioConnection() {
     } catch (error) {
         console.error('Health check error:', error);
         const statusText = document.getElementById('lmStatusText');
-        statusText.textContent = 'LM Studio エラー';
+        statusText.textContent = 'LLM エラー';
         statusText.classList.add('disconnected');
         document.getElementById('modelName').textContent = '';
     }

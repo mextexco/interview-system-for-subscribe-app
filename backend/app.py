@@ -43,11 +43,21 @@ def index():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """ヘルスチェック"""
-    from config import LM_STUDIO_MODEL
-    lm_studio_connected = interviewer.check_lm_studio_connection()
+    from config import LM_STUDIO_MODEL, LM_STUDIO_URL
+    llm_connected = interviewer.check_lm_studio_connection()
+    # 接続先の表示名を判定
+    if 'googleapis.com' in LM_STUDIO_URL:
+        llm_service = 'Gemini API'
+    elif 'groq.com' in LM_STUDIO_URL:
+        llm_service = 'Groq'
+    elif 'openai.com' in LM_STUDIO_URL:
+        llm_service = 'OpenAI'
+    else:
+        llm_service = 'LM Studio'
     return jsonify({
         'status': 'ok',
-        'lm_studio': 'connected' if lm_studio_connected else 'disconnected',
+        'lm_studio': 'connected' if llm_connected else 'disconnected',
+        'llm_service': llm_service,
         'model': LM_STUDIO_MODEL
     })
 
