@@ -6,7 +6,7 @@ import os
 
 # LM Studio設定
 LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions"
-LM_STUDIO_MODEL = "local-model"  # LM Studioでは任意の名前でOK
+LM_STUDIO_MODEL = "google/gemma-3-4b"
 
 # データ保存先
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -177,6 +177,66 @@ STANDARD_KEYS = {
 }
 
 
+def merge_courses(course_ids: list) -> dict:
+    """複数コースIDをマージして1つのコース設定を返す"""
+    if not course_ids:
+        return INTERVIEW_COURSES['basic_info']
+    if len(course_ids) == 1:
+        return INTERVIEW_COURSES.get(course_ids[0], INTERVIEW_COURSES['basic_info'])
+
+    # カテゴリーを順序を保ちながらマージ（重複除去）
+    merged_cats = []
+    seen = set()
+    for cid in course_ids:
+        course = INTERVIEW_COURSES.get(cid, {})
+        for cat in course.get('target_categories', []):
+            if cat not in seen:
+                merged_cats.append(cat)
+                seen.add(cat)
+
+    # フォーカス文をマージ
+    focuses = [INTERVIEW_COURSES[cid].get('extra_focus') for cid in course_ids
+               if INTERVIEW_COURSES.get(cid, {}).get('extra_focus')]
+    merged_focus = '／'.join(focuses) if focuses else None
+
+    # 名前をマージ
+    names = [INTERVIEW_COURSES[cid]['name'] for cid in course_ids if cid in INTERVIEW_COURSES]
+    merged_name = ' + '.join(names)
+
+    # 時間目安（最大値を使用）
+    times = [INTERVIEW_COURSES[cid].get('estimated_time', '') for cid in course_ids if cid in INTERVIEW_COURSES]
+
+    # completion_threshold: カテゴリー数 × 4 を目安に
+    threshold = max(len(merged_cats) * 4, 8)
+
+    # question_topics をマージ（基本プロフィールコースを除いたコースのトピックを結合）
+    merged_topics = []
+    merged_hints = []
+    for cid in course_ids:
+        if cid != 'basic_info':
+            merged_topics.extend(INTERVIEW_COURSES.get(cid, {}).get('question_topics', []))
+            hint = INTERVIEW_COURSES.get(cid, {}).get('extraction_hints')
+            if hint:
+                merged_hints.append(hint)
+
+    return {
+        'name': merged_name,
+        'description': f'{len(course_ids)}コース合算',
+        'icon': '🔀',
+        'catchcopy': f'{merged_name}について聞かせてください',
+        'estimated_time': times[-1] if times else '15〜30分',
+        'target_categories': merged_cats,
+        'completion_threshold': threshold,
+        'enable_random_events': any(
+            INTERVIEW_COURSES.get(cid, {}).get('enable_random_events', True)
+            for cid in course_ids
+        ),
+        'extra_focus': merged_focus,
+        'question_topics': merged_topics,
+        'extraction_hints': '\n\n'.join(merged_hints) if merged_hints else None,
+    }
+
+
 def get_standard_key(category: str, raw_key: str) -> str:
     """
     Get standardized key name for a raw key
@@ -198,6 +258,280 @@ def get_standard_key(category: str, raw_key: str) -> str:
 
     # マッピングが見つからない場合は元のキーを返す
     return raw_key
+
+
+# ヒアリングコース定義
+INTERVIEW_COURSES = {
+    "basic_info": {
+        "name": "基本情報のみ",
+        "description": "名前・年齢・職業などの基本情報のみ",
+        "icon": "👤",
+        "catchcopy": "まずはあなたのことを少しだけ教えてください",
+        "estimated_time": "3〜5分",
+        "target_categories": ["基本プロフィール"],
+        "completion_threshold": 4,
+        "enable_random_events": False,
+        "extra_focus": None
+    },
+    "health_wellness": {
+        "name": "健康・ウェルネス",
+        "description": "健康・体・メンタルについてヒアリング",
+        "icon": "🏥",
+        "catchcopy": "あなたの体と心の声を、丁寧に聞かせてください",
+        "estimated_time": "15〜20分",
+        "target_categories": ["基本プロフィール", "健康・ライフスタイル", "現在の生活"],
+        "completion_threshold": 8,
+        "enable_random_events": True,
+        "extra_focus": "慢性的な悩み・未病領域、かかりつけ医との関係、メンタルヘルスへの意識とセルフケア方法を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【健康・ウェルネス】コースのヒアリングです。\n"
+            "・体調・病気・痛みの話 → 「健康・ライフスタイル」\n"
+            "・運動・スポーツの習慣 → 「健康・ライフスタイル」\n"
+            "・食事・睡眠・ストレス → 「健康・ライフスタイル」\n"
+            "・サプリ・薬・医療サービス → 「健康・ライフスタイル」\n"
+            "・地名・場所が出ても「住所」に分類しない（通院先・ジムの場所など）"
+        ),
+        "question_topics": [
+            "最近、体調で気になっていることや、慢性的な悩みはありますか？",
+            "運動は何かしていますか？",
+            "食事は外食派ですか？自炊派ですか？",
+            "普段の睡眠時間はどのくらいですか？",
+            "ストレスを感じるのはどんなときですか？",
+            "健康のために意識してやっていることはありますか？",
+        ]
+    },
+    "entertainment_deep": {
+        "name": "エンタメ・趣味 深掘り",
+        "description": "趣味・エンタメ・好きなものを深く掘り下げ",
+        "icon": "🎬",
+        "catchcopy": "あなたの\"好き\"を、もっと深く知りたい",
+        "estimated_time": "15〜20分",
+        "target_categories": ["基本プロフィール", "趣味・興味・娯楽", "情報収集・メディア"],
+        "completion_threshold": 8,
+        "enable_random_events": True,
+        "extra_focus": "視聴スタイル（ながら消費 vs 没入型）、一人 vs 誰かと共有、好きなTV番組・動画・音楽・ゲーム・本の具体名を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【エンタメ・趣味 深掘り】コースのヒアリングです。\n"
+            "・動画・YouTube・映画・ドラマ → 「趣味・興味・娯楽」> 動画\n"
+            "・音楽・アーティスト・ジャンル → 「趣味・興味・娯楽」> 音楽\n"
+            "・ゲーム・タイトル・ジャンル → 「趣味・興味・娯楽」> ゲーム\n"
+            "・本・漫画・読書 → 「趣味・興味・娯楽」> 読書\n"
+            "・視聴スタイル・楽しみ方 → 「趣味・興味・娯楽」\n"
+            "・SNS・ニュースサイト・情報収集 → 「情報収集・メディア」\n"
+            "・地名が出ても「住所」に分類しない（ライブ会場・出身地の言及など）"
+        ),
+        "question_topics": [
+            "今一番ハマっている趣味や好きなことは何ですか？",
+            "よく見るYouTubeや動画配信のジャンルを教えてください。",
+            "好きな音楽のジャンルを教えてください。",
+            "ゲームはしますか？",
+            "本や漫画は読みますか？",
+            "コンテンツを楽しむとき、ながら見が多いですか？それとも集中して見る派ですか？",
+        ]
+    },
+    "travel_explorer": {
+        "name": "旅行・おでかけ",
+        "description": "旅行・外出・移動スタイルをヒアリング",
+        "icon": "✈️",
+        "catchcopy": "あなたが次に行きたい場所は、もう決まっていますか？",
+        "estimated_time": "12〜18分",
+        "target_categories": ["基本プロフィール", "趣味・興味・娯楽", "経済・消費"],
+        "completion_threshold": 8,
+        "enable_random_events": True,
+        "extra_focus": "行きたい場所リスト・旅行スタイル（計画型 vs 行き当たり）、普段の外出先・移動手段の好み・旅行の障壁（時間/お金/同行者）を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【旅行・おでかけ】コースのヒアリングです。\n"
+            "・訪問した国・都市・観光地 → 「趣味・興味・娯楽」> 旅行 > 訪問地（「住所」「現在の生活」には絶対分類しない）\n"
+            "・行きたい場所・バケットリスト → 「趣味・興味・娯楽」> 旅行 > 行きたい場所\n"
+            "・旅行スタイル（計画型・行き当たり）→ 「趣味・興味・娯楽」> 旅行 > スタイル\n"
+            "・旅行の障壁（お金・時間・同行者）→ 「経済・消費」> 旅行費用 または「趣味・興味・娯楽」> 旅行 > 障壁\n"
+            "・近場のお気に入りスポット → 「趣味・興味・娯楽」> おでかけ\n"
+            "・移動手段（電車・車・自転車）→ 「趣味・興味・娯楽」> 移動スタイル\n"
+            "⚠️ 地名は必ず「旅行先」として扱い、居住地・現住所として扱わないこと"
+        ),
+        "question_topics": [
+            "最近、旅行はしましたか？",
+            "次に行ってみたい場所はありますか？",
+            "旅行するとき、計画を立てる派ですか？それとも行き当たりばったり派ですか？",
+            "旅行に行くときに、一番障壁になるのは何ですか？",
+            "休日によく行く近場のお気に入りスポットはありますか？",
+            "普段よく使う移動手段は何ですか？",
+        ]
+    },
+    "subscription_audit": {
+        "name": "サブスク棚卸し",
+        "description": "現在契約中のサービスや満足度をヒアリング",
+        "icon": "📱",
+        "catchcopy": "毎月何に払ってる？サブスクを棚卸ししよう",
+        "estimated_time": "15〜20分",
+        "target_categories": ["経済・消費", "価値観・将来"],
+        "completion_threshold": 8,
+        "enable_random_events": False,
+        "extra_focus": "契約中のサービス名・満足度・継続理由、解約経験とその理由、乗り換え検討中のサービス、「なんとなく払い続けている」サービスの有無を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【サブスク棚卸し】コースのヒアリングです。\n"
+            "・Netflix・Spotify・Amazon等のサービス名 → 「経済・消費」> サブスクリプション\n"
+            "・解約したサービス → 「経済・消費」> サブスクリプション > 解約済み\n"
+            "・使っていないのに払っているもの → 「経済・消費」> サブスクリプション > 未活用\n"
+            "・月額の総支出・金額感 → 「経済・消費」> 支出管理\n"
+            "・乗り換え検討中のサービス → 「価値観・将来」> サービス志向\n"
+            "・サービスへの満足度・不満 → 「経済・消費」> サブスクリプション"
+        ),
+        "question_topics": [
+            "今お金を払っているサブスクやアプリを教えてください。",
+            "その中で一番よく使っているサービスはどれですか？",
+            "逆に、ほとんど使っていないのに払い続けているサービスはありますか？",
+            "最近解約したサービスはありますか？",
+            "今後試してみたい、または乗り換えたいサービスはありますか？",
+            "毎月サブスクにどのくらい払っているか、だいたい把握していますか？",
+        ]
+    },
+    "daily_pain": {
+        "name": "日常のモヤモヤ発見",
+        "description": "日常の不満・困りごとを掘り起こす",
+        "icon": "😮‍💨",
+        "catchcopy": "言葉にできなかった\"ちょっとした困った\"を一緒に見つけよう",
+        "estimated_time": "15〜20分",
+        "target_categories": ["現在の生活", "健康・ライフスタイル", "経済・消費"],
+        "completion_threshold": 8,
+        "enable_random_events": False,
+        "extra_focus": "毎日やってるけど本当はやりたくないこと、お金を払っているのに使いきれていないサービス、試したけどやめてしまったことと理由を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【日常のモヤモヤ発見】コースのヒアリングです。\n"
+            "・やりたくない・面倒な日課 → 「現在の生活」> 日常の不満\n"
+            "・使いきれていないサービス・物 → 「経済・消費」> 未活用サービス\n"
+            "・やめてしまったアプリ・サービス・習慣 → 「経済・消費」> 解約・離脱\n"
+            "・不便に感じること → 「現在の生活」> 生活の不便\n"
+            "・時間の無駄と感じること → 「現在の生活」> 時間管理\n"
+            "・買ったが使っていないもの → 「経済・消費」> 未活用購入品\n"
+            "・趣味・好きなことの話が出ても「趣味・興味・娯楽」ではなく「現在の生活」に分類する"
+        ),
+        "question_topics": [
+            "毎日やっているけど、本当はやりたくない・面倒だと感じることはありますか？",
+            "お金を払っているのに、使いきれていないサービスや物はありますか？",
+            "試してみたけどやめてしまったアプリやサービスはありますか？",
+            "普段の生活で「もっとこうだったらいいのに」と感じることはありますか？",
+            "毎日していて「これ時間の無駄かも」と感じることはありますか？",
+            "買ったはいいが、ほとんど使っていないものはありますか？",
+        ]
+    },
+    "spending_behavior": {
+        "name": "消費行動診断",
+        "description": "購買行動・消費スタイルを診断",
+        "icon": "💳",
+        "catchcopy": "何を買うかより、なぜ買うかを知りたい",
+        "estimated_time": "15〜20分",
+        "target_categories": ["経済・消費", "趣味・興味・娯楽", "価値観・将来"],
+        "completion_threshold": 8,
+        "enable_random_events": True,
+        "extra_focus": "衝動買い派 vs 計画購買派、購買意思決定の影響源、「体験にお金を使う」vs「モノにお金を使う」傾向を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【消費行動診断】コースのヒアリングです。\n"
+            "・購買スタイル（衝動・計画）→ 「経済・消費」> 購買スタイル\n"
+            "・購買の参考にするもの（SNS・口コミ等）→ 「経済・消費」> 購買意思決定\n"
+            "・体験 vs モノへの支出傾向 → 「価値観・将来」> お金の使い方\n"
+            "・満足した買い物・失敗した買い物 → 「経済・消費」> 購買体験\n"
+            "・節約意識・ブランド重視 → 「価値観・将来」> 消費価値観\n"
+            "・よく使うショップ・サイト → 「経済・消費」> 購買チャネル\n"
+            "・趣味の話が出ても文脈が「お金の使い方」なら「経済・消費」に分類"
+        ),
+        "question_topics": [
+            "買い物するとき、衝動買い派ですか？それとも計画を立てて買う派ですか？",
+            "何かを買う時に参考にするものは何ですか？",
+            "体験にお金を使うのと、モノを買うのではどちらが好きですか？",
+            "最近で一番満足した買い物は何ですか？",
+            "節約を意識していますか？それとも価格より質を重視しますか？",
+            "よく使うショッピングサイトやお気に入りのお店はありますか？",
+        ]
+    },
+    "career_growth": {
+        "name": "キャリア・仕事",
+        "description": "キャリア・スキルアップ・将来への意識をヒアリング",
+        "icon": "💼",
+        "catchcopy": "今の仕事、5年後の自分、どちらも話してみませんか？",
+        "estimated_time": "15〜20分",
+        "target_categories": ["学習・成長", "価値観・将来", "経済・消費"],
+        "completion_threshold": 8,
+        "enable_random_events": True,
+        "extra_focus": "スキルアップの動機、副業・独立への関心度、AI・テクノロジー変化への不安 vs 期待感を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【キャリア・仕事】コースのヒアリングです。\n"
+            "・習得したいスキル・勉強中のこと → 「学習・成長」> スキルアップ\n"
+            "・副業・独立・転職への関心 → 「価値観・将来」> キャリア志向\n"
+            "・AIやテクノロジーへの意識 → 「価値観・将来」> テクノロジー観\n"
+            "・将来のビジョン・なりたい自分 → 「価値観・将来」> 将来像\n"
+            "・仕事の悩み・課題 → 「学習・成長」> 課題\n"
+            "・収入・給料の話 → 「経済・消費」> 収入\n"
+            "・職業名が出ても「基本プロフィール」ではなく文脈で判断（すでに登録済みの場合は省略）"
+        ),
+        "question_topics": [
+            "今の仕事や職場に満足していますか？",
+            "今身につけたいスキルや、最近勉強していることはありますか？",
+            "副業・独立・転職に興味はありますか？",
+            "AIなどテクノロジーの変化に対して、不安を感じていますか？それとも期待していますか？",
+            "5年後、どんな自分でいたいですか？",
+            "キャリアで今一番悩んでいることはありますか？",
+        ]
+    },
+    "daily_rhythm": {
+        "name": "一日のリズム",
+        "description": "生活リズム・時間の使い方をヒアリング",
+        "icon": "⏰",
+        "catchcopy": "あなたの24時間が、サービスを変える",
+        "estimated_time": "10〜15分",
+        "target_categories": ["現在の生活", "健康・ライフスタイル", "情報収集・メディア"],
+        "completion_threshold": 6,
+        "enable_random_events": True,
+        "extra_focus": "スマホを触る「ゴールデンタイム」、平日 vs 休日の差、意思決定が多い時間帯 vs ぼーっとしたい時間帯を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【一日のリズム】コースのヒアリングです。\n"
+            "・起床・就寝時刻 → 「健康・ライフスタイル」> 睡眠リズム\n"
+            "・朝のルーティン → 「現在の生活」> 朝の習慣\n"
+            "・スマホを触る時間帯 → 「情報収集・メディア」> スマホ利用時間\n"
+            "・集中できる時間帯・ぼーっとする時間帯 → 「現在の生活」> 時間帯別行動\n"
+            "・平日と休日の違い → 「現在の生活」> 生活リズム\n"
+            "・就寝前の行動 → 「現在の生活」> 就寝前習慣\n"
+            "・時刻・時間帯の回答を「趣味・興味・娯楽」や「経済・消費」に分類しないこと"
+        ),
+        "question_topics": [
+            "普段、何時ごろに起きていますか？",
+            "朝起きてからまず何をしますか？",
+            "スマホを一番よく触る時間帯はいつですか？",
+            "一日で一番集中できる時間帯はいつですか？",
+            "平日と休日で生活リズムは大きく変わりますか？",
+            "寝る前によくすることは何ですか？",
+        ]
+    },
+    "learning_curiosity": {
+        "name": "学習・知的好奇心",
+        "description": "学び方・知的興味・成長意欲をヒアリング",
+        "icon": "📚",
+        "catchcopy": "あなたが\"面白い！\"と感じる瞬間を教えてください",
+        "estimated_time": "10〜15分",
+        "target_categories": ["学習・成長", "趣味・興味・娯楽", "情報収集・メディア"],
+        "completion_threshold": 6,
+        "enable_random_events": True,
+        "extra_focus": "学び方のスタイル（動画/本/体験/対話）、スキマ時間 vs まとまった時間、挫折しやすい学習ジャンルとその原因を重点的に聞くこと",
+        "extraction_hints": (
+            "これは【学習・知的好奇心】コースのヒアリングです。\n"
+            "・学び方のスタイル（動画・本・体験）→ 「学習・成長」> 学習スタイル\n"
+            "・勉強中のこと・興味を持った分野 → 「学習・成長」> 学習内容\n"
+            "・学ぶ時間の使い方（スキマ・まとまり）→ 「学習・成長」> 学習時間\n"
+            "・やめてしまった勉強・習い事 → 「学習・成長」> 挫折経験\n"
+            "・面白いと感じるテーマ → 「学習・成長」> 知的関心 または「趣味・興味・娯楽」\n"
+            "・身につけたいスキル → 「学習・成長」> 目標スキル\n"
+            "・ニュース・情報収集の方法が出たら → 「情報収集・メディア」"
+        ),
+        "question_topics": [
+            "何かを学ぶとき、動画・本・人から聞くなど、どの方法が一番好きですか？",
+            "最近、新しく興味を持ったことや勉強していることはありますか？",
+            "スキマ時間にちょっとずつ学ぶ派ですか？まとまった時間で集中して学ぶ派ですか？",
+            "途中でやめてしまった勉強や習い事はありますか？",
+            "「これ面白い！」と感じるのはどんなテーマですか？",
+            "今後身につけたいスキルや、いつか学んでみたいことはありますか？",
+        ]
+    }
+}
 
 
 # バッジ定義
