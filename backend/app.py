@@ -617,13 +617,10 @@ def chat():
 
 @app.route('/api/tts', methods=['POST'])
 def text_to_speech():
-    """Google Cloud TTS プロキシ"""
+    """edge-tts による音声合成（無料・APIキー不要）"""
+    import asyncio
     import base64
-    import requests as req
-    from config import GOOGLE_TTS_API_KEY
-
-    if not GOOGLE_TTS_API_KEY:
-        return jsonify({'error': 'TTS not configured'}), 503
+    import edge_tts
 
     data = request.json
     text = data.get('text', '')
@@ -632,35 +629,30 @@ def text_to_speech():
     if not text:
         return jsonify({'error': 'text required'}), 400
 
+    # キャラクター別音声（Microsoft Edge Neural 音声）
     voice_map = {
-        'misaki': {'name': 'ja-JP-Wavenet-A', 'ssmlGender': 'FEMALE', 'rate': 1.2},
-        'kenta':  {'name': 'ja-JP-Wavenet-C', 'ssmlGender': 'MALE',   'rate': 1.4},
-        'aoi':    {'name': 'ja-JP-Wavenet-B', 'ssmlGender': 'FEMALE', 'rate': 1.2},
+        'misaki': {'voice': 'ja-JP-NanamiNeural', 'rate': '+20%'},
+        'kenta':  {'voice': 'ja-JP-KeitaNeural',  'rate': '+30%'},
+        'aoi':    {'voice': 'ja-JP-NanamiNeural', 'rate': '+20%'},
     }
-    voice = voice_map.get(character, voice_map['aoi'])
+    v = voice_map.get(character, voice_map['aoi'])
 
-    payload = {
-        'input': {'text': text},
-        'voice': {'languageCode': 'ja-JP', 'name': voice['name'], 'ssmlGender': voice['ssmlGender']},
-        'audioConfig': {'audioEncoding': 'MP3', 'speakingRate': voice['rate']}
-    }
+    async def _synth():
+        communicate = edge_tts.Communicate(text, v['voice'], rate=v['rate'])
+        audio_data = b''
+        async for chunk in communicate.stream():
+            if chunk['type'] == 'audio':
+                audio_data += chunk['data']
+        return audio_data
 
     try:
-        resp = req.post(
-            f'https://texttospeech.googleapis.com/v1/text:synthesize?key={GOOGLE_TTS_API_KEY}',
-            json=payload,
-            timeout=10
-        )
+        audio_data = asyncio.run(_synth())
     except Exception as e:
-        log_api.error(f'Google TTS request failed: {e}')
-        return jsonify({'error': 'TTS request failed'}), 502
+        log_api.error(f'edge-tts failed: {e}')
+        return jsonify({'error': 'TTS failed'}), 502
 
-    if resp.status_code != 200:
-        log_api.error(f'Google TTS error: {resp.status_code} {resp.text[:200]}')
-        return jsonify({'error': 'TTS failed', 'detail': resp.text}), 502
-
-    audio_content = resp.json().get('audioContent', '')
-    return jsonify({'audioContent': audio_content})
+    audio_b64 = base64.b64encode(audio_data).decode('utf-8')
+    return jsonify({'audioContent': audio_b64})
 
 
 @app.route('/api/session/<session_id>/export', methods=['GET'])
