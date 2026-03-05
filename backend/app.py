@@ -645,11 +645,23 @@ def text_to_speech():
                 audio_data += chunk['data']
         return audio_data
 
+    def _run_in_thread():
+        """gunicornとasyncioの競合を避けるため専用スレッドで実行"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_synth())
+        finally:
+            loop.close()
+
     try:
-        audio_data = asyncio.run(_synth())
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_run_in_thread)
+            audio_data = future.result(timeout=15)
     except Exception as e:
-        log_api.error(f'edge-tts failed: {e}')
-        return jsonify({'error': 'TTS failed'}), 502
+        log_api.error(f'edge-tts failed: {e}', exc_info=True)
+        return jsonify({'error': 'TTS failed', 'detail': str(e)}), 502
 
     audio_b64 = base64.b64encode(audio_data).decode('utf-8')
     return jsonify({'audioContent': audio_b64})
