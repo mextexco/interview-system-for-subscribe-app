@@ -34,7 +34,9 @@ async function updateStatusDisplay(profile, sessionId = null) {
         // 統計情報を更新
         const sessionCount = profile.sessions ? profile.sessions.length : 0;
         document.getElementById('sessionCount').textContent = sessionCount;
-        document.getElementById('totalDataCount').textContent = profile.total_data_count || 0;
+        const totalCount = profile.total_data_count || 0;
+        document.getElementById('totalDataCount').textContent = totalCount;
+        if (window.updateProfileBadge) window.updateProfileBadge(totalCount);
 
         // バッジ表示を更新
         updateBadgesDisplay(profile.badges);

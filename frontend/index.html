@@ -8,6 +8,12 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- モバイルタブバー（スマートフォン用） -->
+    <div class="mobile-tab-bar" id="mobileTabBar">
+        <button class="mobile-tab active" data-tab="chat">チャット</button>
+        <button class="mobile-tab" data-tab="profile">プロファイル <span class="tab-badge" id="profileTabBadge"></span></button>
+    </div>
+
     <!-- メインコンテナ -->
     <div class="main-container">
         <!-- 左ペイン: チャット -->
@@ -228,6 +234,7 @@
             ? 'http://localhost:5001/api'
             : '/api';
     </script>
+    <script src="js/mobile.js"></script>
     <script src="js/voice.js"></script>
     <script src="js/visualizer.js"></script>
     <script src="js/events.js"></script>

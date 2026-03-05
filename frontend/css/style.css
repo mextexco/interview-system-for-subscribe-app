@@ -1406,3 +1406,132 @@ body {
     background: #0051D5;
     transform: translateY(-1px);
 }
+
+/* ===== モバイルタブバー ===== */
+.mobile-tab-bar {
+    display: none;
+}
+
+/* ===== モバイルレスポンシブ (max-width: 768px) ===== */
+@media (max-width: 768px) {
+    body {
+        overflow: auto;
+    }
+
+    /* タブバー表示 */
+    .mobile-tab-bar {
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 500;
+        background: white;
+        border-bottom: 1px solid #d2d2d7;
+        height: 44px;
+    }
+
+    .mobile-tab {
+        flex: 1;
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        font-size: 14px;
+        font-weight: 500;
+        color: #86868b;
+        cursor: pointer;
+        transition: color 0.2s, border-color 0.2s;
+    }
+
+    .mobile-tab.active {
+        color: #007AFF;
+        border-bottom-color: #007AFF;
+    }
+
+    .tab-badge {
+        display: inline-block;
+        background: #ff3b30;
+        color: white;
+        border-radius: 8px;
+        font-size: 10px;
+        padding: 0 5px;
+        margin-left: 4px;
+        min-width: 16px;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    /* メインコンテナ */
+    .main-container {
+        flex-direction: column;
+        padding-top: 44px;
+        height: auto;
+        min-height: calc(100vh - 36px);
+    }
+
+    /* 左ペイン（チャット） */
+    .left-pane {
+        width: 100%;
+        border-right: none;
+        height: calc(100vh - 44px - 36px);
+    }
+
+    .left-pane.mobile-hidden {
+        display: none;
+    }
+
+    /* 右ペイン（プロファイル） */
+    .right-pane {
+        width: 100%;
+        display: none;
+        padding: 12px;
+        height: calc(100vh - 44px - 36px);
+        overflow-y: auto;
+    }
+
+    .right-pane.mobile-active {
+        display: block;
+    }
+
+    /* キャラクターアバターをコンパクトに */
+    .avatar-placeholder {
+        width: 40px;
+        height: 40px;
+        font-size: 22px;
+    }
+
+    .avatar-placeholder .character-image {
+        max-width: 40px;
+        max-height: 40px;
+    }
+
+    /* 入力エリア：undo/checkbox/speaker を非表示 */
+    .continuous-voice-checkbox,
+    .undo-button,
+    .speaker-icon {
+        display: none;
+    }
+
+    /* コースグリッドを1カラムに */
+    .course-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* モーダルをフルスクリーンに近く */
+    .modal-content {
+        width: 95vw;
+        padding: 16px 14px;
+        max-height: 85vh;
+    }
+
+    /* クレジットフッター非表示 */
+    .credits-footer {
+        display: none;
+    }
+
+    /* プロファイルビジュアライザーの高さ調整 */
+    #profileVisualizerContainer {
+        height: calc(100vh - 180px) !important;
+        min-height: 300px !important;
+    }
+}
