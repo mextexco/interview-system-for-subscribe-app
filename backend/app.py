@@ -12,7 +12,7 @@ import threading
 sys.path.append(os.path.dirname(__file__))
 
 from profile_manager import ProfileManager
-from interviewer import Interviewer
+from interviewer import Interviewer, LLMAPIError
 from gamification import GamificationManager
 from config import CHARACTERS, BADGES, RANDOM_EVENTS, INTERVIEW_COURSES, merge_courses
 from logger import get_logger
@@ -505,26 +505,27 @@ def chat():
             forced_topic=forced_topic
         )
         log_api.debug(f"get_response returned: {'OK' if assistant_response else 'EMPTY/NONE'}")
+    except LLMAPIError as e:
+        # ステータスコード別のわかりやすいメッセージ
+        if e.status_code == 429:
+            user_msg = f'APIのレート制限に達しました（429）。しばらく待ってから再送信してください。'
+        elif e.status_code == 400:
+            user_msg = f'リクエストが不正です（400）。会話が長くなりすぎた可能性があります。'
+        elif e.status_code == 403:
+            user_msg = f'APIキーの権限エラーです（403）。APIキーを確認してください。'
+        elif e.status_code == 0:
+            user_msg = f'LLMへの接続中にエラーが発生しました: {e.message}'
+        else:
+            user_msg = f'LLM APIエラー（{e.status_code}）: {e.message}'
+        log_api.error(f"LLMAPIError: {e}")
+        return jsonify({'success': False, 'error': user_msg}), 503
     except Exception as e:
         log_api.error(f"get_response failed with exception: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'LM Studioとの接続でエラーが発生しました。LM Studioが起動しているか確認してください。'
-        }), 503
+        return jsonify({'success': False, 'error': f'予期しないエラー: {str(e)}'}), 503
 
     if not assistant_response:
-        log_api.error("No response from LM Studio")
-        # LM Studio接続確認
-        if not interviewer.check_lm_studio_connection():
-            return jsonify({
-                'success': False,
-                'error': 'LM Studioとの接続が切れました。LM Studioが起動しているか確認してください。'
-            }), 503
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'LM Studioから応答がありませんでした。モデルが読み込まれているか確認してください。'
-            }), 500
+        log_api.error("No response from LLM")
+        return jsonify({'success': False, 'error': 'LLMから空の応答が返されました。'}), 500
 
     # === スクリプト質問をLLM相槌の後に直接連結 ===
     # LLMが相槌だけ生成し、実際の質問文はバックエンドが確実に追記する
