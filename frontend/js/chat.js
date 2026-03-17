@@ -411,7 +411,6 @@ function setupFinishButton() {
     if (!btn) return;
     btn.addEventListener('click', async () => {
         if (!currentSessionId) return;
-        if (!confirm('ヒアリングを終了しますか？')) return;
         btn.disabled = true;
         try {
             const res = await fetch(`${API_BASE_URL}/chat`, {
