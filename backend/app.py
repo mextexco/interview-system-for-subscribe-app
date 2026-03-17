@@ -96,9 +96,8 @@ def create_user():
     character_map = {
         '男性': 'kenta',      # 青山（男性キャラ）
         '女性': 'misaki',     # つむぎ（女性キャラ）
-        'その他': 'aoi'        # ずんだもん（中性的）
     }
-    character = character_map.get(gender, 'aoi')
+    character = character_map.get(gender, 'misaki')
 
     # ユーザー作成
     profile = profile_manager.create_user(name, gender, character)
@@ -645,11 +644,10 @@ def text_to_speech():
         return jsonify({'error': 'text required'}), 400
 
     voice_map = {
-        'misaki': {'name': 'ja-JP-Wavenet-A', 'ssmlGender': 'FEMALE', 'rate': 1.2},
+        'misaki': {'name': 'ja-JP-Wavenet-A', 'ssmlGender': 'FEMALE', 'rate': 1.4},
         'kenta':  {'name': 'ja-JP-Wavenet-C', 'ssmlGender': 'MALE',   'rate': 1.4},
-        'aoi':    {'name': 'ja-JP-Wavenet-B', 'ssmlGender': 'FEMALE', 'rate': 1.2},
     }
-    voice = voice_map.get(character, voice_map['aoi'])
+    voice = voice_map.get(character, voice_map['misaki'])
 
     payload = {
         'input': {'text': text},

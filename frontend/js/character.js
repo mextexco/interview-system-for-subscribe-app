@@ -13,18 +13,12 @@ const CHARACTER_IMAGES = {
         'normal': 'images/characters/ryusei_normal.png',
         'smile': 'images/characters/ryusei_smile.png',
         'name': '青山龍星'
-    },
-    'aoi': {
-        'normal': 'images/characters/zundamon_normal.png',
-        'smile': 'images/characters/zundamon_smile.png',
-        'name': 'ずんだもん'
     }
 };
 
 const CHARACTER_EMOJIS = {
     'misaki': '👩',
-    'kenta': '👨',
-    'aoi': '🧑'
+    'kenta': '👨'
 };
 
 const EXPRESSION_EMOJIS = {
@@ -63,7 +57,7 @@ function setupCharacter(characterId) {
  */
 function updateCharacterExpression(expression) {
     const avatarEmoji = document.getElementById('avatarEmoji');
-    const characterId = currentProfile?.character || 'aoi';
+    const characterId = currentProfile?.character || 'misaki';
     const characterImages = CHARACTER_IMAGES[characterId];
 
     if (characterImages) {
@@ -105,11 +99,7 @@ function getCharacterData(characterId) {
             name: '青山くん',
             description: '落ち着いて知的な男性'
         },
-        'aoi': {
-            name: 'ずんだもん',
-            description: '親しみやすく中性的'
-        }
     };
 
-    return characters[characterId] || characters['aoi'];
+    return characters[characterId] || characters['misaki'];
 }

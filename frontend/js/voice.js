@@ -573,28 +573,21 @@ function getVoiceSettings(characterId) {
     const settings = {
         'misaki': {
             pitch: 1.2,  // 高め（女性）
-            rate: 1.3,   // やや速め（1.0 → 1.3）
+            rate: 1.5,
             volume: 1.0,
             voicevoxSpeaker: 8,  // 春日部つむぎ（明るい女性）
-            voicevoxSpeed: 1.2
+            voicevoxSpeed: 1.5
         },
         'kenta': {
             pitch: 0.8,  // 低め（男性）
-            rate: 1.5,   // 1.5倍速（0.95 → 1.25 → 1.5）
+            rate: 1.5,
             volume: 1.0,
             voicevoxSpeaker: 13,  // 青山龍星（落ち着いた男性）
-            voicevoxSpeed: 1.5   // 1.5倍速
-        },
-        'aoi': {
-            pitch: 1.0,  // 標準（中性）
-            rate: 1.3,   // やや速め（1.0 → 1.3）
-            volume: 1.0,
-            voicevoxSpeaker: 3,  // ずんだもん（中性的）
-            voicevoxSpeed: 1.2
+            voicevoxSpeed: 1.5
         }
     };
 
-    return settings[characterId] || settings['aoi'];
+    return settings[characterId] || settings['misaki'];
 }
 
 /**
