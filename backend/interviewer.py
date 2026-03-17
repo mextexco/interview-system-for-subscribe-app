@@ -341,7 +341,7 @@ class Interviewer:
                                course_total_count: int = 0,
                                forced_topic: str = None) -> str:
         """システムプロンプトを生成"""
-        character = CHARACTERS.get(character_id, CHARACTERS["aoi"])
+        character = CHARACTERS.get(character_id, CHARACTERS["misaki"])
 
         # 現在掘り下げ中のカテゴリーを検出
         current_category = self._detect_current_category(session_data)
@@ -1174,7 +1174,7 @@ class Interviewer:
         log_debug.info(f"🔄 Forcing topic change: '{forbidden_topic}' → '{next_topic}'")
 
         # キャラクター情報を取得
-        character = CHARACTERS.get(character_id, CHARACTERS["aoi"])
+        character = CHARACTERS.get(character_id, CHARACTERS["misaki"])
 
         # 強制的なシステムプロンプトを生成
         forced_prompt = f"""あなたは{character['name']}、{character['description']}です。
@@ -1240,7 +1240,7 @@ class Interviewer:
 
     def generate_greeting(self, character_id: str, user_name: str = None) -> str:
         """挨拶メッセージを生成"""
-        character = CHARACTERS.get(character_id, CHARACTERS["aoi"])
+        character = CHARACTERS.get(character_id, CHARACTERS["misaki"])
 
         if user_name:
             return f"こんにちは{user_name}さん！今日もお話しましょう！"
