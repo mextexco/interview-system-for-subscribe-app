@@ -35,15 +35,6 @@ CHARACTERS = {
         "for_user_gender": "男性",
         "expressions": ["normal", "smile", "surprised", "thinking", "empathy", "encourage"]
     },
-    "aoi": {
-        "name": "ずんだもん",
-        "gender": "中性的",
-        "age": "20代",
-        "description": "親しみやすく中性的なキャラクター",
-        "tone": "カジュアルで親しみやすい",
-        "for_user_gender": "その他",
-        "expressions": ["normal", "smile", "surprised", "thinking", "empathy", "encourage"]
-    }
 }
 
 # プロファイリングカテゴリー定義
