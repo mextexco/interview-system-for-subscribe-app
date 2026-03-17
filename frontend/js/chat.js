@@ -136,11 +136,6 @@ async function loadCoursesIntoGrid() {
                 <div class="course-icon">${course.icon}</div>
                 <div class="course-info">
                     <div class="course-name">${course.name}</div>
-                    <div class="course-catchcopy">${course.catchcopy}</div>
-                    <div class="course-meta">
-                        <span class="course-cats">${course.target_categories.join(' · ')}</span>
-                        <span class="course-time-badge">${course.estimated_time}</span>
-                    </div>
                 </div>
             `;
             card.addEventListener('click', () => toggleCourseSelection(courseId, card));

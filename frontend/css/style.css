@@ -990,8 +990,7 @@ body {
 }
 
 .char-avatar {
-    font-size: 24px;
-    line-height: 1;
+    display: none;
 }
 
 .char-name {
@@ -1066,7 +1065,7 @@ body {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 7px;
-    max-height: min(400px, 48vh);
+    max-height: min(480px, 55vh);
     overflow-y: auto;
     text-align: left;
     padding-right: 4px;
@@ -1076,7 +1075,7 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 9px;
-    padding: 10px 12px;
+    padding: 7px 10px;
     border: 1.5px solid #e5e5ea;
     border-radius: 10px;
     cursor: pointer;
@@ -1103,10 +1102,10 @@ body {
 }
 
 .course-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: #1d1d1f;
-    margin-bottom: 3px;
+    margin-bottom: 0;
 }
 
 .course-catchcopy {
