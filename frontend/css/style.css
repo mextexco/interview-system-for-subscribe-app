@@ -1584,6 +1584,14 @@ body {
     color: #86868b;
 }
 
+/* オートフィル時に背景・文字色が変わる問題を防ぐ */
+#nameInput:-webkit-autofill,
+#nameInput:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1d1d1f;
+    -webkit-box-shadow: 0 0 0px 1000px #ffffff inset;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
 .name-lookup-result {
     width: 100%;
     padding: 10px 14px;
@@ -1601,7 +1609,7 @@ body {
 .name-lookup-result.new-user {
     border-color: #D4CFC9;
     background: #F7F6F4;
-    color: #86868b;
+    color: #515154;
 }
 
 .name-next-btn {
