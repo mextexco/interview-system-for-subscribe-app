@@ -67,6 +67,7 @@
                         </div>
                     </div>
                     <button class="finish-btn" id="finishBtn" title="ヒアリングをいつでも終了できます">終了する</button>
+                    <button class="memory-view-open-btn" id="memoryViewOpenBtn" title="記憶を見る">🧠 記憶</button>
                 </div>
             </div>
 
@@ -193,6 +194,31 @@
         </div>
     </div>
 
+    <!-- 記憶閲覧モーダル -->
+    <div class="modal hidden" id="memoryViewModal">
+        <div class="modal-content memory-view-modal-content">
+            <h2>記憶を見る</h2>
+            <p class="step-sub">名前を入力してユーザーの記憶を表示します</p>
+
+            <div class="memory-view-search">
+                <input type="text" id="memoryViewNameInput" placeholder="名前を入力..." autocomplete="off" />
+                <button class="memory-view-search-btn" id="memoryViewSearchBtn">検索</button>
+            </div>
+
+            <div class="memory-view-result hidden" id="memoryViewResult">
+                <div class="memory-view-meta" id="memoryViewMeta"></div>
+                <div class="memory-view-list" id="memoryViewList"></div>
+                <div class="memory-view-actions">
+                    <button class="memory-view-refresh-btn" id="memoryViewRefreshBtn">mem0から更新する</button>
+                </div>
+            </div>
+
+            <div class="memory-view-footer">
+                <button class="memory-btn-secondary" id="memoryViewCloseBtn">閉じる</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 記憶確認モーダル -->
     <div class="modal hidden" id="memoryModal">
         <div class="modal-content memory-modal-content">
@@ -301,6 +327,7 @@
             // 終了ボタン・ダウンロードボタンのセットアップ
             setupFinishButton();
             setupDownloadButton();
+            setupMemoryViewModal();
 
             // プロファイルビジュアライザー初期化（少し遅延させてReactの読み込みを待つ）
             setTimeout(() => {

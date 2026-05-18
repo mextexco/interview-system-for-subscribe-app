@@ -830,9 +830,16 @@ def lookup_user():
 
 @app.route('/api/memory/<user_id>', methods=['GET'])
 def get_memories(user_id):
-    """ユーザーのmem0記憶一覧を取得"""
-    memories = memory_manager.get_memories(user_id)
-    return jsonify({'memories': memories})
+    """キャッシュからユーザーの記憶一覧を取得（API消費なし）"""
+    result = memory_manager.get_memories_cached(user_id)
+    return jsonify(result)
+
+
+@app.route('/api/memory/<user_id>/refresh', methods=['POST'])
+def refresh_memories(user_id):
+    """mem0から強制再取得してキャッシュを更新（API消費あり）"""
+    result = memory_manager.refresh_memories(user_id)
+    return jsonify(result)
 
 
 @app.route('/api/memory/save', methods=['POST'])

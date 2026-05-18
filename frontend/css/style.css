@@ -1839,3 +1839,139 @@ body {
         width: 95vw;
     }
 }
+
+/* ============================================================
+   記憶閲覧モーダル
+   ============================================================ */
+
+.memory-view-modal-content {
+    max-width: 560px;
+    width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.memory-view-search {
+    display: flex;
+    gap: 8px;
+}
+
+.memory-view-search input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1.5px solid #D4CFC9;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #1d1d1f;
+    background: #F7F6F4;
+    outline: none;
+    font-family: inherit;
+}
+
+.memory-view-search input:focus {
+    border-color: #5C82A8;
+    background: white;
+}
+
+.memory-view-search input::placeholder {
+    color: #86868b;
+}
+
+.memory-view-search-btn {
+    padding: 9px 18px;
+    border: 1.5px solid #5C82A8;
+    border-radius: 8px;
+    background: white;
+    color: #5C82A8;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.memory-view-search-btn:hover {
+    background: #5C82A8;
+    color: white;
+}
+
+.memory-view-meta {
+    font-size: 12px;
+    color: #86868b;
+    padding: 6px 10px;
+    background: #F7F6F4;
+    border-radius: 6px;
+}
+
+.memory-view-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+.memory-view-item {
+    font-size: 13px;
+    color: #1d1d1f;
+    padding: 8px 12px;
+    border-left: 3px solid #5C82A8;
+    background: #EEF3F8;
+    border-radius: 0 8px 8px 0;
+    line-height: 1.5;
+}
+
+.memory-view-empty {
+    font-size: 13px;
+    color: #86868b;
+    text-align: center;
+    padding: 20px 0;
+}
+
+.memory-view-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.memory-view-refresh-btn {
+    font-size: 13px;
+    padding: 7px 16px;
+    border: 1.5px solid #D4CFC9;
+    border-radius: 8px;
+    background: white;
+    color: #86868b;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.memory-view-refresh-btn:hover {
+    border-color: #5C82A8;
+    color: #5C82A8;
+}
+
+.memory-view-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 4px;
+    border-top: 1px solid #E4DFDA;
+}
+
+.memory-view-open-btn {
+    font-size: 12px;
+    padding: 5px 10px;
+    border: 1.5px solid #D4CFC9;
+    border-radius: 8px;
+    background: white;
+    color: #86868b;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.memory-view-open-btn:hover {
+    border-color: #5C82A8;
+    color: #5C82A8;
+}

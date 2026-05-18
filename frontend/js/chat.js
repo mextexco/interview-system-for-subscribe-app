@@ -516,6 +516,95 @@ function setupFinishButton() {
 }
 
 /**
+ * 記憶閲覧モーダルのセットアップ
+ */
+function setupMemoryViewModal() {
+    const openBtn = document.getElementById('memoryViewOpenBtn');
+    const closeBtn = document.getElementById('memoryViewCloseBtn');
+    const modal = document.getElementById('memoryViewModal');
+    const searchBtn = document.getElementById('memoryViewSearchBtn');
+    const nameInput = document.getElementById('memoryViewNameInput');
+    const refreshBtn = document.getElementById('memoryViewRefreshBtn');
+
+    if (!openBtn) return;
+
+    openBtn.addEventListener('click', () => modal.classList.remove('hidden'));
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+
+    nameInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') searchBtn.click();
+    });
+
+    searchBtn.addEventListener('click', () => loadMemoryView(false));
+    refreshBtn.addEventListener('click', () => loadMemoryView(true));
+}
+
+let memoryViewUserId = null;
+
+async function loadMemoryView(forceRefresh = false) {
+    const name = document.getElementById('memoryViewNameInput').value.trim();
+    if (!name) return;
+
+    const resultEl = document.getElementById('memoryViewResult');
+    const metaEl = document.getElementById('memoryViewMeta');
+    const listEl = document.getElementById('memoryViewList');
+
+    metaEl.textContent = '検索中...';
+    listEl.innerHTML = '';
+    resultEl.classList.remove('hidden');
+
+    // 名前からuser_idを取得
+    try {
+        const lookupRes = await fetch(`${API_BASE_URL}/user/lookup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const lookupData = await lookupRes.json();
+        if (!lookupData.exists) {
+            metaEl.textContent = `「${name}」さんは見つかりませんでした`;
+            return;
+        }
+        memoryViewUserId = lookupData.profile.user_id;
+    } catch (e) {
+        metaEl.textContent = 'ユーザー検索エラー';
+        return;
+    }
+
+    // 記憶を取得（キャッシュ or 強制更新）
+    try {
+        let res;
+        if (forceRefresh) {
+            metaEl.textContent = 'mem0から取得中...（API消費あり）';
+            res = await fetch(`${API_BASE_URL}/memory/${memoryViewUserId}/refresh`, { method: 'POST' });
+        } else {
+            res = await fetch(`${API_BASE_URL}/memory/${memoryViewUserId}`);
+        }
+        const data = await res.json();
+        const memories = data.memories || [];
+        const fetchedAt = data.fetched_at;
+        const fromCache = data.from_cache;
+
+        if (fetchedAt) {
+            const dt = new Date(fetchedAt).toLocaleString('ja-JP');
+            metaEl.textContent = `${name}さん｜${memories.length}件｜${fromCache ? 'キャッシュ' : 'mem0から取得'} (${dt})`;
+        } else {
+            metaEl.textContent = `${name}さん｜キャッシュなし｜「mem0から更新する」で取得してください`;
+        }
+
+        if (memories.length === 0) {
+            listEl.innerHTML = '<p class="memory-view-empty">記憶がありません</p>';
+            return;
+        }
+        listEl.innerHTML = memories.map(m =>
+            `<div class="memory-view-item">${m.memory || JSON.stringify(m)}</div>`
+        ).join('');
+    } catch (e) {
+        metaEl.textContent = '取得エラー';
+    }
+}
+
+/**
  * 記憶の値を表示用文字列に変換（配列・オブジェクト・プリミティブ対応）
  */
 function formatMemoryValue(val) {
