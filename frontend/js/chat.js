@@ -516,6 +516,15 @@ function setupFinishButton() {
 }
 
 /**
+ * 記憶の値を表示用文字列に変換（配列・オブジェクト・プリミティブ対応）
+ */
+function formatMemoryValue(val) {
+    if (Array.isArray(val)) return val.join(', ');
+    if (val && typeof val === 'object') return val.original || val.value || Object.values(val).join(', ');
+    return val ?? '';
+}
+
+/**
  * 記憶確認モーダルを表示
  */
 async function showMemoryModal(session) {
@@ -544,14 +553,14 @@ async function showMemoryModal(session) {
         ? '<p style="color:rgba(255,255,255,0.3);font-size:0.8rem;font-family:monospace;">抽出データなし</p>'
         : allItems.map(item => {
             const path = [item.category, item.subcategory1, item.subcategory2].filter(Boolean).join(' > ');
-            return `<div class="memory-raw-item"><span class="raw-category">${path}</span><br>${item.key}: ${Array.isArray(item.value) ? item.value.join(', ') : item.value}</div>`;
+            return `<div class="memory-raw-item"><span class="raw-category">${path}</span><br>${item.key}: ${formatMemoryValue(item.value)}</div>`;
         }).join('');
 
     // 右列（保存候補、編集可）
     const saveList = document.getElementById('memorySaveList');
     const saveItems = allItems.map((item, idx) => {
         const path = [item.category, item.subcategory1, item.subcategory2].filter(Boolean).join(' > ');
-        const valStr = Array.isArray(item.value) ? item.value.join(', ') : item.value;
+        const valStr = formatMemoryValue(item.value);
         return { idx, text: `[${path}] ${item.key}: ${valStr}`, original: item };
     });
 
