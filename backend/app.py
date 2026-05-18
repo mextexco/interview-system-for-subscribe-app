@@ -163,13 +163,23 @@ def create_session():
     session['course_ids'] = course_ids
     session['course_id'] = course_ids[0]  # 後方互換
     session['course'] = course_config
+
+    # ユーザー名をセッションに保持（インタビュアーが参照する）
+    user_name = profile.get('name', '')
+    if user_name in ('名無し', ''):
+        user_name = None
+    session['user_name'] = user_name or ''
+
+    # 名前を基本プロフィールに自動登録（ヒアリング不要にする）
+    if user_name:
+        profile_manager.add_extracted_data(
+            session['session_id'], '基本プロフィール', '名前', user_name
+        )
+
     profile_manager.update_session(session['session_id'], session)
 
     # 挨拶メッセージ
     character_id = profile['character']
-    user_name = profile.get('name')
-    if user_name == '名無し':
-        user_name = None
     greeting = interviewer.generate_greeting(character_id, user_name)
     first_question = interviewer.generate_first_question(character_id)
 

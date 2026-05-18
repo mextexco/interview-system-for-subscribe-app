@@ -22,7 +22,6 @@ log_debug = get_logger('Debug')
 
 # 基本プロフィール収集用の固定質問文
 BASIC_FIELD_QUESTIONS = {
-    "名前": "お名前を教えてもらえますか？",
     "年齢": "何歳ですか？",
     "性別": "性別を教えてください。",
     "職業": "お仕事は何をされていますか？",
@@ -31,18 +30,16 @@ BASIC_FIELD_QUESTIONS = {
 
 # フィールドごとの相槌バリエーション（毎回「ありがとうございます」にならないように）
 BASIC_FIELD_ACKS = {
-    "名前": ["よろしくお願いします！", "はじめまして！"],
     "年齢": ["なるほど！", "そうなんですね。"],
     "性別": ["わかりました。", "了解です！"],
     "職業": ["そうなんですね！", "なるほど！"],
     "家族構成": ["わかりました！", "そうなんですね。"],
     None: ["なるほど！", "そうなんですね！", "わかりました！", "了解です！"],
 }
-BASIC_FIELD_ORDER = ["名前", "年齢", "性別", "職業", "家族構成"]
+BASIC_FIELD_ORDER = ["年齢", "性別", "職業", "家族構成"]
 
 # 各フィールドを「聞いた」と判定するキーワード
 BASIC_FIELD_KEYWORDS = {
-    "名前": ["名前", "お名前"],
     "年齢": ["何歳", "年齢"],
     "性別": ["性別"],
     "職業": ["お仕事", "職業", "仕事は"],
@@ -232,18 +229,8 @@ class Interviewer:
         """
         is_basic_only = (course_config is None or
                          course_config.get('target_categories') == ['基本プロフィール'])
-        # ユーザー名を取得（「吉田です」→「吉田」に語尾を除去）
-        user_name = ""
-        conversation = session_data.get('conversation', [])
-        for i, msg in enumerate(conversation):
-            if msg.get('role') == 'assistant' and any(kw in msg.get('content', '') for kw in ["名前", "お名前"]):
-                if i + 1 < len(conversation) and conversation[i + 1].get('role') == 'user':
-                    name_val = conversation[i + 1].get('content', '').strip()
-                    # 「です」「ます」「と申します」などの語尾を除去
-                    name_val = re.sub(r'(です|ます|と申します|といいます|だよ|だわ|ですよ|ですね|でーす)$', '', name_val).strip()
-                    if name_val and len(name_val) <= 15:
-                        user_name = name_val
-                break
+        # ユーザー名はプロファイルから直接取得
+        user_name = session_data.get('user_name', '') if session_data else ''
 
         # 直前に聞いたフィールドを特定してルールベースで検証
         last_asked = self._get_last_asked_field(session_data)
@@ -398,19 +385,9 @@ class Interviewer:
 
                     if next_field and not is_completed:
                         question_text = BASIC_FIELD_QUESTIONS[next_field]
-                        # ユーザー名があれば付ける
-                        name_prefix = ""
-                        if session_data and 'conversation' in session_data:
-                            for msg in session_data['conversation']:
-                                if msg.get('role') == 'assistant' and '名前' in msg.get('content', ''):
-                                    idx = session_data['conversation'].index(msg)
-                                    if idx + 1 < len(session_data['conversation']):
-                                        replied = session_data['conversation'][idx + 1]
-                                        if replied.get('role') == 'user':
-                                            name_val = replied.get('content', '').strip()
-                                            if name_val and len(name_val) <= 10:
-                                                name_prefix = f"{name_val}さん、"
-                                    break
+                        # ユーザー名はプロファイルから取得
+                        raw_name = session_data.get('user_name', '') if session_data else ''
+                        name_prefix = f"{raw_name}さん、" if raw_name else ""
                         forced_next_question = f"""
 ════════════════════════════════
 【基本プロフィール進捗】
@@ -454,32 +431,8 @@ class Interviewer:
         else:
             empty_cats = None  # 初期状態では表示しない
 
-        # 名前が既に取得されているかチェック（セッションデータから）
-        user_name = None
-        if session_data and 'extracted_data' in session_data:
-            basic_profile = session_data['extracted_data'].get('基本プロフィール', [])
-            for item in basic_profile:
-                if item.get('key') == '名前' and item.get('value'):
-                    user_name = item['value']
-                    log_debug.debug(f"Found user name in session data: {user_name}")
-                    break
-
-        # 名前がまだない場合、直前の会話から推測
-        if not user_name and session_data and 'conversation' in session_data:
-            conversation = session_data['conversation']
-            if len(conversation) >= 2:
-                # 最後から2番目がAI（名前を聞いた）、最後がユーザー（名前を答えた）
-                last_assistant = conversation[-2] if conversation[-2].get('role') == 'assistant' else None
-                last_user = conversation[-1] if conversation[-1].get('role') == 'user' else None
-
-                if last_assistant and last_user:
-                    # AIが「名前」について聞いているか
-                    if '名前' in last_assistant.get('content', ''):
-                        # ユーザーの返答が短い（名前の可能性）
-                        user_response = last_user.get('content', '').strip()
-                        if len(user_response) <= 20 and user_response:
-                            user_name = user_response
-                            log_debug.debug(f"Inferred user name from conversation: {user_name}")
+        # ユーザー名はプロファイルから直接取得
+        user_name = session_data.get('user_name') if session_data else None
 
 
         # 会話履歴から同じトピック（サブカテゴリー1レベル）の連続質問数をカウント
