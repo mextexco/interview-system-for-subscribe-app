@@ -11,6 +11,8 @@ let currentCourse = null;
 let selectedGender = null;
 let selectedCourseIds = [];   // 複数選択対応
 let allCoursesData = {};      // /api/courses の結果をキャッシュ
+let isReturningUser = false;  // 既存ユーザーフラグ
+let inputtedName = '';        // 入力された名前
 // API_BASE_URL は visualizer.js で定義されている
 
 /**
@@ -77,15 +79,43 @@ async function showStartModal() {
     const modal = document.getElementById('startModal');
     modal.classList.remove('hidden');
 
-    // ステップ1: キャラクター選択（選択状態をビジュアル表示）
+    // ステップ0: 名前入力
+    const nameInput = document.getElementById('nameInput');
+    const nameNextBtn = document.getElementById('nameNextBtn');
+    const nameLookupResult = document.getElementById('nameLookupResult');
+    let lookupTimer = null;
+
+    nameInput.addEventListener('input', () => {
+        const name = nameInput.value.trim();
+        nameNextBtn.disabled = name.length === 0;
+        nameLookupResult.className = 'name-lookup-result hidden';
+        nameLookupResult.textContent = '';
+        clearTimeout(lookupTimer);
+        if (name.length < 1) return;
+        lookupTimer = setTimeout(() => lookupUserByName(name, nameLookupResult), 400);
+    });
+
+    nameInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !nameNextBtn.disabled) nameNextBtn.click();
+    });
+
+    nameNextBtn.addEventListener('click', () => {
+        inputtedName = nameInput.value.trim();
+        if (!inputtedName) return;
+        if (isReturningUser) {
+            showCourseStep();
+        } else {
+            showCharacterStep();
+        }
+    });
+
+    // ステップ1: キャラクター選択
     const genderButtons = document.querySelectorAll('.gender-btn');
     genderButtons.forEach(btn => {
         btn.addEventListener('click', () => {
-            // 選択状態を切り替え
             genderButtons.forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
             selectedGender = btn.dataset.gender;
-            // 少し間を置いてから次ステップへ
             setTimeout(() => showCourseStep(), 200);
         });
     });
@@ -101,9 +131,49 @@ async function showStartModal() {
 }
 
 /**
+ * 名前でユーザーを検索し、結果を表示
+ */
+async function lookupUserByName(name, resultEl) {
+    try {
+        const res = await fetch(`${API_BASE_URL}/user/lookup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.exists) {
+            isReturningUser = true;
+            currentUserId = data.profile.user_id;
+            currentProfile = data.profile;
+            selectedGender = data.profile.gender || '女性';
+            resultEl.textContent = `■ ${name} さんのデータが見つかりました。前回の記憶を引き継ぎます。`;
+            resultEl.className = 'name-lookup-result returning';
+        } else {
+            isReturningUser = false;
+            currentUserId = null;
+            currentProfile = null;
+            resultEl.textContent = `> 新規ユーザーとして登録します。`;
+            resultEl.className = 'name-lookup-result new-user';
+        }
+        resultEl.classList.remove('hidden');
+    } catch (e) {
+        console.error('[LookupUser] Error:', e);
+    }
+}
+
+/**
+ * キャラクター選択ステップを表示
+ */
+function showCharacterStep() {
+    document.getElementById('stepName').classList.add('hidden');
+    document.getElementById('stepCharacter').classList.remove('hidden');
+}
+
+/**
  * コース選択ステップを表示
  */
 function showCourseStep() {
+    document.getElementById('stepName').classList.add('hidden');
     document.getElementById('stepCharacter').classList.add('hidden');
     document.getElementById('stepCourse').classList.remove('hidden');
 }
@@ -186,29 +256,32 @@ async function startInterview(gender, courseIds = ['basic_info']) {
     // マージ後のコース情報をUIに使う（最初のコースを代表として使用）
     currentCourse = allCoursesData[courseIds[0]] || null;
     try {
-        // ユーザー作成
-        const createResponse = await fetch(`${API_BASE_URL}/user/create`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gender: gender })
-        });
+        if (!isReturningUser) {
+            // 新規ユーザー作成
+            const createResponse = await fetch(`${API_BASE_URL}/user/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gender: gender, name: inputtedName })
+            });
 
-        if (!createResponse.ok) {
-            const errorText = await createResponse.text();
-            console.error('[StartInterview] User creation error:', createResponse.status, errorText);
-            alert(`ユーザー作成に失敗しました (${createResponse.status})`);
-            return;
+            if (!createResponse.ok) {
+                const errorText = await createResponse.text();
+                console.error('[StartInterview] User creation error:', createResponse.status, errorText);
+                alert(`ユーザー作成に失敗しました (${createResponse.status})`);
+                return;
+            }
+
+            const createData = await createResponse.json();
+            if (!createData.success) {
+                console.error('[StartInterview] User creation failed:', createData);
+                alert('ユーザー作成に失敗しました');
+                return;
+            }
+
+            currentUserId = createData.user_id;
+            currentProfile = createData.profile;
         }
-
-        const createData = await createResponse.json();
-        if (!createData.success) {
-            console.error('[StartInterview] User creation failed:', createData);
-            alert('ユーザー作成に失敗しました');
-            return;
-        }
-
-        currentUserId = createData.user_id;
-        currentProfile = createData.profile;
+        // 既存ユーザーの場合は lookup 時点で currentUserId/currentProfile セット済み
 
         // セッション作成
         const sessionResponse = await fetch(`${API_BASE_URL}/session/create`, {
@@ -432,12 +505,123 @@ function setupFinishButton() {
                 document.getElementById('sendButton').disabled = true;
                 document.getElementById('micButton').disabled = true;
                 btn.textContent = '終了済み';
+                // 記憶確認モーダルを表示
+                setTimeout(() => showMemoryModal(data.session || null), 1200);
             }
         } catch (e) {
             console.error('[FinishBtn] Error:', e);
             btn.disabled = false;
         }
     });
+}
+
+/**
+ * 記憶確認モーダルを表示
+ */
+async function showMemoryModal(session) {
+    // セッションデータが渡されなかった場合はAPIから取得
+    if (!session && currentSessionId) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/session/${currentSessionId}`);
+            const data = await res.json();
+            session = data.session;
+        } catch (e) {
+            console.error('[MemoryModal] Session fetch error:', e);
+        }
+    }
+
+    const extractedData = session?.extracted_data || {};
+    const allItems = [];
+    Object.entries(extractedData).forEach(([category, items]) => {
+        items.forEach(item => {
+            allItems.push({ category, ...item });
+        });
+    });
+
+    // 左列（元データ）
+    const rawList = document.getElementById('memoryRawList');
+    rawList.innerHTML = allItems.length === 0
+        ? '<p style="color:rgba(255,255,255,0.3);font-size:0.8rem;font-family:monospace;">抽出データなし</p>'
+        : allItems.map(item => {
+            const path = [item.category, item.subcategory1, item.subcategory2].filter(Boolean).join(' > ');
+            return `<div class="memory-raw-item"><span class="raw-category">${path}</span><br>${item.key}: ${Array.isArray(item.value) ? item.value.join(', ') : item.value}</div>`;
+        }).join('');
+
+    // 右列（保存候補、編集可）
+    const saveList = document.getElementById('memorySaveList');
+    const saveItems = allItems.map((item, idx) => {
+        const path = [item.category, item.subcategory1, item.subcategory2].filter(Boolean).join(' > ');
+        const valStr = Array.isArray(item.value) ? item.value.join(', ') : item.value;
+        return { idx, text: `[${path}] ${item.key}: ${valStr}`, original: item };
+    });
+
+    saveList.innerHTML = saveItems.map(s => `
+        <div class="memory-save-item" data-idx="${s.idx}">
+            <textarea class="memory-save-text" rows="2">${s.text}</textarea>
+            <button class="memory-save-delete" data-idx="${s.idx}">削除</button>
+        </div>
+    `).join('');
+
+    saveList.querySelectorAll('.memory-save-delete').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.memory-save-item').classList.add('deleted');
+        });
+    });
+
+    // 保存ボタン
+    document.getElementById('memorySendBtn').onclick = () => sendToMem0(saveItems);
+    document.getElementById('memorySkipBtn').onclick = () => {
+        document.getElementById('memoryModal').classList.add('hidden');
+    };
+    document.getElementById('memoryDoneBtn').onclick = () => {
+        document.getElementById('memoryModal').classList.add('hidden');
+    };
+
+    // モーダル表示
+    document.getElementById('memoryResult').classList.add('hidden');
+    document.getElementById('memoryActions').classList.remove('hidden');
+    document.getElementById('memoryModal').classList.remove('hidden');
+}
+
+/**
+ * 保存候補をmem0に送信
+ */
+async function sendToMem0(saveItems) {
+    const activeItems = [];
+    document.querySelectorAll('.memory-save-item:not(.deleted)').forEach(el => {
+        const idx = parseInt(el.dataset.idx);
+        const text = el.querySelector('.memory-save-text').value.trim();
+        const original = saveItems[idx]?.original;
+        if (text && original) {
+            activeItems.push({ ...original, _displayText: text });
+        }
+    });
+
+    if (activeItems.length === 0) {
+        document.getElementById('memoryModal').classList.add('hidden');
+        return;
+    }
+
+    document.getElementById('memoryActions').classList.add('hidden');
+    const resultEl = document.getElementById('memoryResult');
+    resultEl.classList.remove('hidden');
+    document.getElementById('memoryResultList').innerHTML = '<div class="memory-saving-indicator">[ mem0 に保存中... ]</div>';
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/memory/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: currentUserId, items: activeItems })
+        });
+        const data = await res.json();
+        const memories = data.memories || [];
+        document.getElementById('memoryResultList').innerHTML = memories.length === 0
+            ? '<p style="color:rgba(255,255,255,0.3);font-size:0.8rem;font-family:monospace;">保存された記憶なし</p>'
+            : memories.map(m => `<div class="memory-result-item">${m.memory || m.text || JSON.stringify(m)}</div>`).join('');
+    } catch (e) {
+        console.error('[SendToMem0] Error:', e);
+        document.getElementById('memoryResultList').innerHTML = '<div class="memory-result-item" style="color:#ff5050;">エラーが発生しました</div>';
+    }
 }
 
 /**

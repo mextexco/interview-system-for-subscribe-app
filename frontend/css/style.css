@@ -1534,3 +1534,329 @@ body {
         min-height: 300px !important;
     }
 }
+
+/* ============================================================
+   名前入力ステップ（Warp Future Emerald V3）
+   ============================================================ */
+
+#stepName {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 8px 0;
+}
+
+#stepName h2 {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 1.4rem;
+    letter-spacing: 0.2em;
+    color: #00ff41;
+    text-transform: uppercase;
+    margin: 0;
+    text-shadow: 0 0 12px rgba(0, 255, 65, 0.5);
+}
+
+.name-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    border: 0.5px solid #00ff41;
+    border-radius: 4px;
+    padding: 10px 14px;
+    background: rgba(0, 255, 65, 0.03);
+}
+
+.name-input-prefix {
+    color: #00ff41;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+#nameInput {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 1rem;
+    width: 100%;
+    caret-color: #00ff41;
+}
+
+#nameInput::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.name-lookup-result {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    border: 0.5px solid transparent;
+}
+
+.name-lookup-result.returning {
+    border-color: #00ff41;
+    background: rgba(0, 255, 65, 0.05);
+    color: #00ff41;
+}
+
+.name-lookup-result.new-user {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.02);
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.name-next-btn {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    padding: 10px 32px;
+    border: 0.5px solid #00ff41;
+    border-radius: 4px;
+    background: transparent;
+    color: #00ff41;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    text-transform: uppercase;
+}
+
+.name-next-btn:hover:not(:disabled) {
+    background: #00ff41;
+    color: #061a0c;
+}
+
+.name-next-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* ============================================================
+   記憶確認モーダル（Warp Future Emerald V3）
+   ============================================================ */
+
+.memory-modal-content {
+    max-width: 820px;
+    width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: rgba(6, 26, 12, 0.97);
+    border: 0.5px solid #00ff41;
+}
+
+.memory-modal-title {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    color: #00ff41;
+    letter-spacing: 0.2em;
+    font-size: 1.2rem;
+    text-align: center;
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.4);
+    margin: 0;
+}
+
+.memory-modal-sub {
+    text-align: center;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    margin: 0;
+}
+
+.memory-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.memory-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.memory-col-header {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.78rem;
+    color: #00ff41;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding-bottom: 6px;
+    border-bottom: 0.5px solid rgba(0, 255, 65, 0.3);
+}
+
+.memory-col-hint {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: 8px;
+}
+
+/* 元データ（左列） */
+.memory-raw-item {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 6px 10px;
+    border-left: 2px solid rgba(255, 255, 255, 0.1);
+    line-height: 1.5;
+}
+
+.memory-raw-item .raw-category {
+    color: rgba(0, 255, 65, 0.5);
+    font-size: 0.7rem;
+}
+
+/* 保存候補（右列） */
+.memory-save-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 0.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+    transition: border-color 0.15s;
+}
+
+.memory-save-item:hover {
+    border-color: rgba(0, 255, 65, 0.3);
+}
+
+.memory-save-item.deleted {
+    opacity: 0.3;
+    text-decoration: line-through;
+    pointer-events: none;
+}
+
+.memory-save-text {
+    flex: 1;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    color: #ffffff;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    min-height: 36px;
+    line-height: 1.5;
+}
+
+.memory-save-delete {
+    flex-shrink: 0;
+    background: transparent;
+    border: 0.5px solid rgba(255, 80, 80, 0.4);
+    border-radius: 3px;
+    color: rgba(255, 80, 80, 0.7);
+    font-size: 0.7rem;
+    padding: 3px 7px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.memory-save-delete:hover {
+    border-color: #ff5050;
+    color: #ff5050;
+}
+
+/* アクションボタン */
+.memory-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.memory-btn-primary {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    padding: 10px 24px;
+    border: 0.5px solid #00ff41;
+    border-radius: 4px;
+    background: transparent;
+    color: #00ff41;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.memory-btn-primary:hover:not(:disabled) {
+    background: #00ff41;
+    color: #061a0c;
+}
+
+.memory-btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.memory-btn-secondary {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    padding: 10px 24px;
+    border: 0.5px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.memory-btn-secondary:hover {
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #ffffff;
+}
+
+/* 結果表示 */
+.memory-result {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 0.5px solid rgba(0, 255, 65, 0.3);
+}
+
+.memory-result-item {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 8px 12px;
+    border-left: 2px solid #00ff41;
+    background: rgba(0, 255, 65, 0.03);
+}
+
+.memory-done-btn {
+    align-self: flex-end;
+    margin-top: 8px;
+}
+
+.memory-saving-indicator {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: #00ff41;
+    padding: 12px;
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0.3; }
+}
+
+@media (max-width: 640px) {
+    .memory-columns {
+        grid-template-columns: 1fr;
+    }
+    .memory-modal-content {
+        width: 95vw;
+    }
+}

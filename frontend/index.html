@@ -146,8 +146,20 @@
     <!-- スタート画面（モーダル） -->
     <div class="modal" id="startModal">
         <div class="modal-content">
+            <!-- ステップ0: 名前入力 -->
+            <div id="stepName">
+                <h2>INTERVIEW SYSTEM</h2>
+                <p class="step-sub">お名前を入力してください</p>
+                <div class="name-input-wrap">
+                    <span class="name-input-prefix">&gt;</span>
+                    <input type="text" id="nameInput" placeholder="名前を入力..." autocomplete="off" />
+                </div>
+                <div class="name-lookup-result hidden" id="nameLookupResult"></div>
+                <button class="name-next-btn" id="nameNextBtn" disabled>次へ</button>
+            </div>
+
             <!-- ステップ1: キャラクター選択 -->
-            <div id="stepCharacter">
+            <div id="stepCharacter" class="hidden">
                 <h2>ヒアリングを始めます</h2>
                 <p>担当キャラクターを選んでください</p>
                 <div class="gender-buttons">
@@ -177,6 +189,36 @@
                     <span class="selected-count-label" id="selectedCountLabel">コースを選んでください</span>
                     <button class="start-interview-btn" id="startInterviewBtn" disabled>ヒアリング開始</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 記憶確認モーダル -->
+    <div class="modal hidden" id="memoryModal">
+        <div class="modal-content memory-modal-content">
+            <h2 class="memory-modal-title">[ MEMORY REVIEW ]</h2>
+            <p class="memory-modal-sub">保存するデータを確認・編集してから mem0 に送信してください</p>
+            <div class="memory-columns">
+                <!-- 左: 抽出データ（元） -->
+                <div class="memory-col">
+                    <div class="memory-col-header">抽出データ（元）</div>
+                    <div class="memory-raw-list" id="memoryRawList"></div>
+                </div>
+                <!-- 右: 保存候補（編集可） / mem0結果（確認後） -->
+                <div class="memory-col">
+                    <div class="memory-col-header" id="memorySaveColHeader">保存候補 <span class="memory-col-hint">編集・削除できます</span></div>
+                    <div class="memory-save-list" id="memorySaveList"></div>
+                </div>
+            </div>
+            <div class="memory-actions" id="memoryActions">
+                <button class="memory-btn-secondary" id="memorySkipBtn">保存しない</button>
+                <button class="memory-btn-primary" id="memorySendBtn">mem0 に保存する</button>
+            </div>
+            <!-- 保存結果表示 -->
+            <div class="memory-result hidden" id="memoryResult">
+                <div class="memory-col-header">[ mem0 保存結果 ]</div>
+                <div class="memory-result-list" id="memoryResultList"></div>
+                <button class="memory-btn-primary memory-done-btn" id="memoryDoneBtn">完了</button>
             </div>
         </div>
     </div>
