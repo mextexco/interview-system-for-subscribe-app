@@ -1536,107 +1536,98 @@ body {
 }
 
 /* ============================================================
-   名前入力ステップ（Warp Future Emerald V3）
+   名前入力ステップ
    ============================================================ */
 
 #stepName {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
     padding: 8px 0;
-}
-
-#stepName h2 {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 1.4rem;
-    letter-spacing: 0.2em;
-    color: #00ff41;
-    text-transform: uppercase;
-    margin: 0;
-    text-shadow: 0 0 12px rgba(0, 255, 65, 0.5);
 }
 
 .name-input-wrap {
     display: flex;
     align-items: center;
-    gap: 8px;
     width: 100%;
-    border: 0.5px solid #00ff41;
-    border-radius: 4px;
+    border: 1.5px solid #D4CFC9;
+    border-radius: 10px;
     padding: 10px 14px;
-    background: rgba(0, 255, 65, 0.03);
+    background: #F7F6F4;
+    transition: border-color 0.2s;
+}
+
+.name-input-wrap:focus-within {
+    border-color: #5C82A8;
+    background: #ffffff;
 }
 
 .name-input-prefix {
-    color: #00ff41;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 1.1rem;
+    color: #86868b;
+    font-size: 14px;
     flex-shrink: 0;
+    margin-right: 8px;
 }
 
 #nameInput {
     background: transparent;
     border: none;
     outline: none;
-    color: #ffffff;
-    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 1rem;
+    color: #1d1d1f;
+    font-size: 15px;
     width: 100%;
-    caret-color: #00ff41;
+    font-family: inherit;
 }
 
 #nameInput::placeholder {
-    color: rgba(255, 255, 255, 0.3);
+    color: #86868b;
 }
 
 .name-lookup-result {
     width: 100%;
     padding: 10px 14px;
-    border-radius: 4px;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.85rem;
-    border: 0.5px solid transparent;
+    border-radius: 8px;
+    font-size: 13px;
+    border: 1.5px solid transparent;
 }
 
 .name-lookup-result.returning {
-    border-color: #00ff41;
-    background: rgba(0, 255, 65, 0.05);
-    color: #00ff41;
+    border-color: #34c759;
+    background: rgba(52, 199, 89, 0.06);
+    color: #1a7a35;
 }
 
 .name-lookup-result.new-user {
-    border-color: rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.02);
-    color: rgba(255, 255, 255, 0.6);
+    border-color: #D4CFC9;
+    background: #F7F6F4;
+    color: #86868b;
 }
 
 .name-next-btn {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.9rem;
-    letter-spacing: 0.1em;
+    font-size: 15px;
+    font-weight: 600;
     padding: 10px 32px;
-    border: 0.5px solid #00ff41;
-    border-radius: 4px;
-    background: transparent;
-    color: #00ff41;
+    border: 1.5px solid #5C82A8;
+    border-radius: 10px;
+    background: white;
+    color: #5C82A8;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-    text-transform: uppercase;
+    transition: all 0.2s ease;
 }
 
 .name-next-btn:hover:not(:disabled) {
-    background: #00ff41;
-    color: #061a0c;
+    background: #5C82A8;
+    color: white;
 }
 
 .name-next-btn:disabled {
-    opacity: 0.3;
+    opacity: 0.35;
     cursor: not-allowed;
 }
 
 /* ============================================================
-   記憶確認モーダル（Warp Future Emerald V3）
+   記憶確認モーダル
    ============================================================ */
 
 .memory-modal-content {
@@ -1647,25 +1638,22 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    background: rgba(6, 26, 12, 0.97);
-    border: 0.5px solid #00ff41;
+    background: white;
+    text-align: left;
 }
 
 .memory-modal-title {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    color: #00ff41;
-    letter-spacing: 0.2em;
-    font-size: 1.2rem;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1d1d1f;
     text-align: center;
-    text-shadow: 0 0 10px rgba(0, 255, 65, 0.4);
     margin: 0;
 }
 
 .memory-modal-sub {
     text-align: center;
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.5);
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    color: #86868b;
     margin: 0;
 }
 
@@ -1682,36 +1670,35 @@ body {
 }
 
 .memory-col-header {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.78rem;
-    color: #00ff41;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d1d1f;
     padding-bottom: 6px;
-    border-bottom: 0.5px solid rgba(0, 255, 65, 0.3);
+    border-bottom: 1.5px solid #E4DFDA;
 }
 
 .memory-col-hint {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.35);
-    text-transform: none;
-    letter-spacing: 0;
-    margin-left: 8px;
+    font-size: 11px;
+    font-weight: 400;
+    color: #86868b;
+    margin-left: 6px;
 }
 
 /* 元データ（左列） */
 .memory-raw-item {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.55);
+    font-size: 12px;
+    color: #86868b;
     padding: 6px 10px;
-    border-left: 2px solid rgba(255, 255, 255, 0.1);
+    border-left: 2px solid #E4DFDA;
     line-height: 1.5;
+    background: #F7F6F4;
+    border-radius: 0 6px 6px 0;
 }
 
 .memory-raw-item .raw-category {
-    color: rgba(0, 255, 65, 0.5);
-    font-size: 0.7rem;
+    color: #5C82A8;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 /* 保存候補（右列） */
@@ -1720,100 +1707,98 @@ body {
     align-items: flex-start;
     gap: 8px;
     padding: 8px 10px;
-    border: 0.5px solid rgba(255, 255, 255, 0.08);
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.02);
-    transition: border-color 0.15s;
+    border: 1.5px solid #E4DFDA;
+    border-radius: 8px;
+    background: white;
+    transition: border-color 0.2s;
 }
 
 .memory-save-item:hover {
-    border-color: rgba(0, 255, 65, 0.3);
+    border-color: #5C82A8;
 }
 
 .memory-save-item.deleted {
-    opacity: 0.3;
+    opacity: 0.35;
     text-decoration: line-through;
     pointer-events: none;
 }
 
 .memory-save-text {
     flex: 1;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.82rem;
-    color: #ffffff;
+    font-size: 13px;
+    color: #1d1d1f;
     background: transparent;
     border: none;
     outline: none;
     resize: none;
     min-height: 36px;
     line-height: 1.5;
+    font-family: inherit;
 }
 
 .memory-save-delete {
     flex-shrink: 0;
     background: transparent;
-    border: 0.5px solid rgba(255, 80, 80, 0.4);
-    border-radius: 3px;
-    color: rgba(255, 80, 80, 0.7);
-    font-size: 0.7rem;
-    padding: 3px 7px;
+    border: 1.5px solid #E4DFDA;
+    border-radius: 6px;
+    color: #86868b;
+    font-size: 11px;
+    padding: 3px 8px;
     cursor: pointer;
-    font-family: 'JetBrains Mono', monospace;
-    transition: border-color 0.15s, color 0.15s;
+    transition: all 0.2s;
 }
 
 .memory-save-delete:hover {
-    border-color: #ff5050;
-    color: #ff5050;
+    border-color: #C4796A;
+    color: #C4796A;
+    background: rgba(196, 121, 106, 0.05);
 }
 
 /* アクションボタン */
 .memory-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
-    padding-top: 8px;
-    border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid #E4DFDA;
 }
 
 .memory-btn-primary {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.85rem;
-    letter-spacing: 0.08em;
+    font-size: 14px;
+    font-weight: 600;
     padding: 10px 24px;
-    border: 0.5px solid #00ff41;
-    border-radius: 4px;
-    background: transparent;
-    color: #00ff41;
+    border: 1.5px solid #5C82A8;
+    border-radius: 10px;
+    background: white;
+    color: #5C82A8;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: all 0.2s ease;
 }
 
 .memory-btn-primary:hover:not(:disabled) {
-    background: #00ff41;
-    color: #061a0c;
+    background: #5C82A8;
+    color: white;
 }
 
 .memory-btn-primary:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: not-allowed;
 }
 
 .memory-btn-secondary {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.85rem;
+    font-size: 14px;
     padding: 10px 24px;
-    border: 0.5px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.5);
+    border: 1.5px solid #D4CFC9;
+    border-radius: 10px;
+    background: white;
+    color: #86868b;
     cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
+    transition: all 0.2s ease;
 }
 
 .memory-btn-secondary:hover {
-    border-color: rgba(255, 255, 255, 0.5);
-    color: #ffffff;
+    border-color: #86868b;
+    color: #1d1d1f;
 }
 
 /* 結果表示 */
@@ -1822,34 +1807,28 @@ body {
     flex-direction: column;
     gap: 10px;
     padding-top: 12px;
-    border-top: 0.5px solid rgba(0, 255, 65, 0.3);
+    border-top: 1px solid #E4DFDA;
 }
 
 .memory-result-item {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.75);
+    font-size: 13px;
+    color: #1d1d1f;
     padding: 8px 12px;
-    border-left: 2px solid #00ff41;
-    background: rgba(0, 255, 65, 0.03);
+    border-left: 3px solid #5C82A8;
+    background: #EEF3F8;
+    border-radius: 0 8px 8px 0;
 }
 
 .memory-done-btn {
     align-self: flex-end;
-    margin-top: 8px;
+    margin-top: 4px;
 }
 
 .memory-saving-indicator {
     text-align: center;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.82rem;
-    color: #00ff41;
-    padding: 12px;
-    animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-    50% { opacity: 0.3; }
+    font-size: 13px;
+    color: #5C82A8;
+    padding: 16px;
 }
 
 @media (max-width: 640px) {
