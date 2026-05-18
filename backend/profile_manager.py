@@ -53,6 +53,19 @@ class ProfileManager:
         with open(profile_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
+    def find_user_by_name(self, name: str) -> Optional[Dict]:
+        """名前でユーザーを検索。最初にヒットしたプロファイルを返す"""
+        if not os.path.exists(PROFILES_DIR):
+            return None
+        for filename in os.listdir(PROFILES_DIR):
+            if not filename.endswith('.json'):
+                continue
+            with open(os.path.join(PROFILES_DIR, filename), 'r', encoding='utf-8') as f:
+                profile = json.load(f)
+            if profile.get('name') == name:
+                return profile
+        return None
+
     def update_user(self, user_id: str, updates: Dict) -> Dict:
         """ユーザープロファイルを更新"""
         profile = self.get_user(user_id)

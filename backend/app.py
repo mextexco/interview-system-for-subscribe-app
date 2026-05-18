@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(__file__))
 from profile_manager import ProfileManager
 from interviewer import Interviewer, LLMAPIError
 from gamification import GamificationManager
+from memory_manager import MemoryManager
 from config import CHARACTERS, BADGES, RANDOM_EVENTS, INTERVIEW_COURSES, merge_courses
 from logger import get_logger
 
@@ -33,6 +34,7 @@ CORS(app)
 profile_manager = ProfileManager()
 interviewer = Interviewer()
 gamification = GamificationManager()
+memory_manager = MemoryManager()
 
 
 @app.route('/')
@@ -800,6 +802,54 @@ def undo_last_turn():
     except Exception as e:
         log_undo.error(f"Undo failed: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/user/lookup', methods=['POST'])
+def lookup_user():
+    """名前でユーザーを検索（新規 or 既存の判定）"""
+    data = request.json
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'name required'}), 400
+
+    profile = profile_manager.find_user_by_name(name)
+    if profile:
+        return jsonify({'exists': True, 'profile': profile})
+    return jsonify({'exists': False})
+
+
+@app.route('/api/memory/<user_id>', methods=['GET'])
+def get_memories(user_id):
+    """ユーザーのmem0記憶一覧を取得"""
+    memories = memory_manager.get_memories(user_id)
+    return jsonify({'memories': memories})
+
+
+@app.route('/api/memory/save', methods=['POST'])
+def save_memories():
+    """
+    インタビュー終了後に抽出データをmem0に保存する。
+    リクエスト: { user_id, items: [{category, subcategory1, subcategory2, key, value}, ...] }
+    レスポンス: mem0に保存された記憶一覧
+    """
+    data = request.json
+    user_id = data.get('user_id')
+    items = data.get('items', [])
+
+    if not user_id:
+        return jsonify({'error': 'user_id required'}), 400
+
+    saved = memory_manager.add_memories(user_id, items)
+    return jsonify({'success': True, 'memories': saved})
+
+
+@app.route('/api/memory/<memory_id>', methods=['DELETE'])
+def delete_memory(memory_id):
+    """指定した記憶をmem0から削除"""
+    success = memory_manager.delete_memory(memory_id)
+    if success:
+        return jsonify({'success': True})
+    return jsonify({'error': '削除に失敗しました'}), 500
 
 
 if __name__ == '__main__':
