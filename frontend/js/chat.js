@@ -565,7 +565,7 @@ async function loadMemoryView(forceRefresh = false) {
             metaEl.textContent = `「${name}」さんは見つかりませんでした`;
             return;
         }
-        memoryViewUserId = lookupData.profile.user_id;
+        memoryViewUserId = name;
     } catch (e) {
         metaEl.textContent = 'ユーザー検索エラー';
         return;
@@ -709,7 +709,7 @@ async function sendToMem0(saveItems) {
         const res = await fetch(`${API_BASE_URL}/memory/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: currentUserId, items: activeItems })
+            body: JSON.stringify({ user_id: inputtedName, items: activeItems })
         });
         const data = await res.json();
         const memories = data.memories || [];
