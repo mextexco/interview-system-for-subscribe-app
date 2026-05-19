@@ -553,23 +553,8 @@ async function loadMemoryView(forceRefresh = false) {
     listEl.innerHTML = '';
     resultEl.classList.remove('hidden');
 
-    // 名前からuser_idを取得
-    try {
-        const lookupRes = await fetch(`${API_BASE_URL}/user/lookup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-        });
-        const lookupData = await lookupRes.json();
-        if (!lookupData.exists) {
-            metaEl.textContent = `「${name}」さんは見つかりませんでした`;
-            return;
-        }
-        memoryViewUserId = name;
-    } catch (e) {
-        metaEl.textContent = 'ユーザー検索エラー';
-        return;
-    }
+    // mem0のuser_idは名前そのもの
+    memoryViewUserId = name;
 
     // 記憶を取得（キャッシュ or 強制更新）
     try {
