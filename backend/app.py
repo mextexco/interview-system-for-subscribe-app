@@ -69,7 +69,7 @@ def health_check():
 def get_version():
     """バージョン情報を取得"""
     return jsonify({
-        'backend_version': '5.1',
+        'backend_version': '5.2',
         'data_structure_version': '5.0',
         'description': '5階層データ構造対応'
     })
