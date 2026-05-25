@@ -879,7 +879,8 @@ def save_memories():
         return jsonify({'error': 'user_id required'}), 400
 
     saved = memory_manager.add_memories(user_id, items)
-    return jsonify({'success': True, 'memories': saved})
+    # mem0は非同期処理のため保存直後は空が返る。pending=Trueでフロントに伝える
+    return jsonify({'success': True, 'memories': saved, 'pending': len(saved) == 0})
 
 
 @app.route('/api/memory/<memory_id>', methods=['DELETE'])

@@ -700,9 +700,16 @@ async function sendToMem0(saveItems) {
         });
         const data = await res.json();
         const memories = data.memories || [];
-        document.getElementById('memoryResultList').innerHTML = memories.length === 0
-            ? '<p style="color:rgba(255,255,255,0.3);font-size:0.8rem;font-family:monospace;">保存された記憶なし</p>'
-            : memories.map(m => `<div class="memory-result-item">${m.memory || m.text || JSON.stringify(m)}</div>`).join('');
+        if (data.pending) {
+            document.getElementById('memoryResultList').innerHTML =
+                '<p style="color:rgba(0,255,65,0.7);font-size:0.85rem;font-family:monospace;">✓ mem0へ送信しました。<br>処理に数秒かかります。「記憶を閲覧する」→「mem0から更新する」で確認できます。</p>';
+        } else if (memories.length === 0) {
+            document.getElementById('memoryResultList').innerHTML =
+                '<p style="color:rgba(255,255,255,0.3);font-size:0.8rem;font-family:monospace;">保存された記憶なし</p>';
+        } else {
+            document.getElementById('memoryResultList').innerHTML =
+                memories.map(m => `<div class="memory-result-item">${m.memory || m.text || JSON.stringify(m)}</div>`).join('');
+        }
     } catch (e) {
         console.error('[SendToMem0] Error:', e);
         document.getElementById('memoryResultList').innerHTML = '<div class="memory-result-item" style="color:#ff5050;">エラーが発生しました</div>';
