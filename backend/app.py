@@ -182,6 +182,7 @@ def create_session():
     character_id = profile['character']
     greeting = interviewer.generate_greeting(character_id, user_name)
     has_basic_course = '基本プロフィール' in course_config.get('target_categories', [])
+    log_api.info(f"[session/create] user_name={repr(user_name)}, has_basic_course={has_basic_course}, course_ids={course_ids}")
 
     if user_name:
         # 名前は手動入力済み → 名前質問を出さない
