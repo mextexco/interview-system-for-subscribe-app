@@ -555,6 +555,7 @@ async function loadMemoryView(forceRefresh = false) {
 
     // mem0のuser_idは名前そのもの
     memoryViewUserId = name;
+    console.log('[loadMemoryView] user_id:', memoryViewUserId, '| forceRefresh:', forceRefresh);
 
     // 記憶を取得（キャッシュ or 強制更新）
     try {
@@ -690,6 +691,7 @@ async function sendToMem0(saveItems) {
     resultEl.classList.remove('hidden');
     document.getElementById('memoryResultList').innerHTML = '<div class="memory-saving-indicator">[ mem0 に保存中... ]</div>';
 
+    console.log('[sendToMem0] user_id:', inputtedName, '| items:', activeItems.length);
     try {
         const res = await fetch(`${API_BASE_URL}/memory/save`, {
             method: 'POST',

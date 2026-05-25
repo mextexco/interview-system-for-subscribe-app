@@ -118,13 +118,14 @@ class MemoryManager:
 
         try:
             self.client.add(text, user_id=user_id)
+            log_mem.info(f"mem0保存キュー登録完了 (user_id={user_id}): 非同期処理中")
         except Exception as e:
             log_mem.error(f"記憶保存エラー: {e}")
             return []
 
-        # 保存後にキャッシュを更新
-        result = self.refresh_memories(user_id)
-        return result["memories"]
+        # mem0は非同期処理(PENDING)のため、即時refreshすると空が返りキャッシュが壊れる
+        # キャッシュは次回の明示的refreshまたはGETアクセス時に更新する
+        return []
 
     def delete_memory(self, memory_id: str) -> bool:
         """指定した記憶を削除"""

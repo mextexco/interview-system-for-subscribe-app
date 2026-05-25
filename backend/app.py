@@ -12,7 +12,7 @@ import threading
 sys.path.append(os.path.dirname(__file__))
 
 from profile_manager import ProfileManager
-from interviewer import Interviewer, LLMAPIError
+from interviewer import Interviewer, LLMAPIError, BASIC_FIELD_QUESTIONS
 from gamification import GamificationManager
 from memory_manager import MemoryManager
 from config import CHARACTERS, BADGES, RANDOM_EVENTS, INTERVIEW_COURSES, merge_courses
@@ -181,9 +181,23 @@ def create_session():
     # 挨拶メッセージ
     character_id = profile['character']
     greeting = interviewer.generate_greeting(character_id, user_name)
-    first_question = interviewer.generate_first_question(character_id)
+    has_basic_course = '基本プロフィール' in course_config.get('target_categories', [])
 
-    combined_message = f"{greeting}\n{first_question}"
+    if user_name:
+        # 名前は手動入力済み → 名前質問を出さない
+        if has_basic_course:
+            # 基本プロフィールコース: 最初の実質的な質問(年齢)を直接出す
+            first_question = BASIC_FIELD_QUESTIONS['年齢']
+        else:
+            # 非基本コース: 挨拶のみ送り、name-only フェーズを即スキップ
+            session['basic_info_phase_done'] = True
+            profile_manager.update_session(session['session_id'], session)
+            first_question = None
+    else:
+        # 名前が未設定 → 名前を聞く
+        first_question = interviewer.generate_first_question(character_id)
+
+    combined_message = f"{greeting}\n{first_question}" if first_question else greeting
     profile_manager.add_message(session['session_id'], 'assistant', combined_message, 'smile')
 
     # ランダムイベントチェック（コースが許可している場合のみ）
@@ -830,8 +844,16 @@ def lookup_user():
 
 @app.route('/api/memory/<user_id>', methods=['GET'])
 def get_memories(user_id):
-    """キャッシュからユーザーの記憶一覧を取得（API消費なし）"""
+    """
+    キャッシュからユーザーの記憶一覧を取得。
+    キャッシュ未作成 or キャッシュが空(0件)の場合は自動でmem0から取得する。
+    ※ mem0のaddは非同期(PENDING)のため、保存直後は空キャッシュが残る場合がある。
+    """
     result = memory_manager.get_memories_cached(user_id)
+    cache_is_empty = not result.get('memories')
+    if cache_is_empty:
+        log_api.info(f"[memory] キャッシュなし or 0件のためmem0から自動取得: user_id={user_id}")
+        result = memory_manager.refresh_memories(user_id)
     return jsonify(result)
 
 
