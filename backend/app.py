@@ -894,6 +894,19 @@ def delete_memory(memory_id):
 
 
 if __name__ == '__main__':
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':  # debugリロード時の二重表示を防ぐ
+        G, D, R = "\033[38;5;46m", "\033[2m", "\033[0m"
+        print(f"""{G}
+ ___ _   _ _____ _____ ______     _____ _______        __
+|_ _| \\ | |_   _| ____|  _ \\ \\   / /_ _| ____\\ \\      / /
+ | ||  \\| | | | |  _| | |_) \\ \\ / / | ||  _|  \\ \\ /\\ / /
+ | || |\\  | | | | |___|  _ < \\ V /  | || |___  \\ V  V /
+|___|_| \\_| |_| |_____|_| \\_\\ \\_/  |___|_____|  \\_/\\_/
+{R}""", flush=True)
+        print(f"{G}  インタビューシステム バックエンド（Flask / LM Studio連携）{R}")
+        print(f"{D}  LM Studio: {interviewer.lm_studio_url}{R}")
+        print(f"  開く → {G}http://localhost:5001{R}")
+        print(f"{D}  停止: Ctrl+C{R}\n", flush=True)
     log_system.info("=" * 50)
     log_system.info("Interview System Backend Starting...")
     log_system.info("=" * 50)
